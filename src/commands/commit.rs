@@ -1,0 +1,36 @@
+use colored::Colorize;
+use uuid::Uuid;
+use crate::utils::{
+    config::read_env_file,
+    local_store::{append_commit, LocalCommit},
+    crypto::encrypt_env,
+    mac::get_device_mac,
+};
+
+/// `greenbyte commit "message"`
+/// Takes a local snapshot of the current .env — like a local git commit.
+/// Encrypted snapshot is stored in .greenbyte-logs.
+pub async fn commit(message: String) -> Result<(), String> {
+    let env_content = read_env_file()?;
+    let mac = get_device_mac()?;
+    let master_key = rpassword::prompt_password("Master Key: ")
+        .map_err(|e| e.to_string())?;
+
+    let encrypted = encrypt_env(&env_content, &master_key, &mac)?;
+    let id = Uuid::new_v4().to_string();
+
+    let commit = LocalCommit {
+        id: id.clone(),
+        message: message.clone(),
+        timestamp: chrono::Utc::now(),
+        env_snapshot: encrypted.data,
+    };
+
+    append_commit(commit)?;
+
+    println!("{} Local commit saved", "✓".green().bold());
+    println!("  ID:      {}", id.cyan());
+    println!("  Message: \"{}\"", message);
+    println!("  Use `greenbyte rollback --local {}` to restore.", &id[..8]);
+    Ok(())
+}

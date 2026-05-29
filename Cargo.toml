@@ -1,7 +1,73 @@
 [package]
-name = "my-cli"
+name = "greenbyte"
 version = "0.1.0"
 edition = "2021"
+description = "Team .env manager — secure, versioned, collaborative"
+authors = ["Greenbyte"]
+
+[[bin]]
+name = "greenbyte"
+path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+# CLI argument parsing
+clap = { version = "4.5", features = ["derive"] }
+
+# Async runtime
+tokio = { version = "1.38", features = ["full"] }
+
+# HTTP client for server communication
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization / deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Encryption (AES-256-GCM)
+aes-gcm = "0.10"
+
+# Key derivation (for master key from password)
+argon2 = "0.5"
+
+# Random number generation
+rand = "0.8"
+
+# Base64 encoding/decoding
+base64 = "0.22"
+
+# SHA hashing
+sha2 = "0.10"
+
+# HMAC
+hmac = "0.12"
+
+# Get MAC address of the machine
+mac_address = "1.1"
+
+# Read/write dotenv files
+dotenvy = "0.15"
+
+# Colored terminal output
+colored = "2.1"
+
+# Spinner / progress indicator
+indicatif = "0.17"
+
+# Home directory resolution
+dirs = "5.0"
+
+# Date/time for logs
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID for commit addresses
+uuid = { version = "1.8", features = ["v4"] }
+
+# Secure password input (hides typing)
+rpassword = "7.3"
+
+# Hex encoding/decoding
+hex = "0.4"
+
+[profile.release]
+opt-level = 3
+strip = true

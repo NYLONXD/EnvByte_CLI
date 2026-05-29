@@ -1,0 +1,27 @@
+/// Default Greenbyte server URL.
+/// Override with the GREENBYTE_SERVER environment variable.
+pub fn server_url() -> String {
+    std::env::var("GREENBYTE_SERVER")
+        .unwrap_or_else(|_| "https://api.greenbyte.dev".to_string())
+}
+
+/// Returns the path to the .env file in the current directory.
+pub fn env_file_path() -> std::path::PathBuf {
+    std::path::Path::new(".env").to_path_buf()
+}
+
+/// Reads the raw contents of the local .env file.
+pub fn read_env_file() -> Result<String, String> {
+    let path = env_file_path();
+    if !path.exists() {
+        return Err("No .env file found in the current directory.".to_string());
+    }
+    std::fs::read_to_string(&path)
+        .map_err(|e| format!("Could not read .env: {}", e))
+}
+
+/// Writes content to the local .env file.
+pub fn write_env_file(content: &str) -> Result<(), String> {
+    std::fs::write(env_file_path(), content)
+        .map_err(|e| format!("Could not write .env: {}", e))
+}
