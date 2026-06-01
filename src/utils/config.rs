@@ -2,7 +2,7 @@
 /// Override with the GREENBYTE_SERVER environment variable.
 pub fn server_url() -> String {
     std::env::var("GREENBYTE_SERVER")
-        .unwrap_or_else(|_| "https://api.greenbyte.dev".to_string())
+        .unwrap_or_else(|_| "http://localhost:3030".to_string())
 }
 
 /// Returns the path to the .env file in the current directory.

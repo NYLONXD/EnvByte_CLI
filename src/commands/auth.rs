@@ -4,9 +4,9 @@ use crate::utils::{config::server_url, local_store::{save_global_auth, GlobalAut
 
 #[derive(Serialize)]
 struct RegisterRequest {
+    username: String,
     email: String,
     password: String,
-    user_id: String,
 }
 
 #[derive(Serialize)]
@@ -19,6 +19,10 @@ struct LoginRequest {
 struct AuthResponse {
     token: String,
     user_id: String,
+    #[allow(dead_code)]
+    username: String,
+    #[allow(dead_code)]
+    email: String,
 }
 
 /// `greenbyte register` — create a new account
@@ -39,8 +43,8 @@ pub async fn register() -> Result<(), String> {
 
     let client = reqwest::Client::new();
     let res = client
-        .post(format!("{}/auth/register", server_url()))
-        .json(&RegisterRequest { email: email.clone(), password, user_id: user_id.clone() })
+        .post(format!("{}/auth/signup", server_url()))
+        .json(&RegisterRequest { username: user_id.clone(), email: email.clone(), password })
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
@@ -49,7 +53,7 @@ pub async fn register() -> Result<(), String> {
 
     if !res.status().is_success() {
         let msg: serde_json::Value = res.json().await.unwrap_or_default();
-        return Err(format!("Registration failed: {}", msg["error"].as_str().unwrap_or("unknown")));
+        return Err(format!("Registration failed: {}", msg["message"].as_str().unwrap_or("unknown")));
     }
 
     let data: AuthResponse = res.json().await
