@@ -1,19 +1,47 @@
 use colored::Colorize;
+use serde::Deserialize;
 use crate::utils::{
-    config::env_file_path,
-    local_store::{load_config, load_logs, config_exists},
+    config::{env_file_path, server_url},
+    local_store::{load_config, load_logs, config_exists, load_global_auth},
     mac::get_device_mac,
 };
+
+#[derive(Deserialize)]
+struct UserProfile {
+    username: String,
+    email: String,
+}
 
 /// `greenbyte status`
 /// Shows the current state of the project — linked project, last commit, .env presence.
 pub async fn show() -> Result<(), String> {
     println!("{}", "─── Greenbyte Status ─────────────────────────────────".dimmed());
 
-    // ── Auth ────────────────────────────────────────────────────────────────
-    let global_auth = crate::utils::local_store::load_global_auth().unwrap_or_default();
-    match &global_auth.email {
-        Some(email) => println!("  {} Logged in as {}", "●".green(), email.cyan()),
+    // ── Auth — fetch logged-in user from server ─────────────────────────────
+    let global_auth = load_global_auth().unwrap_or_default();
+    match &global_auth.auth_token {
+        Some(token) => {
+            match fetch_me(token).await {
+                Ok(profile) => {
+                    println!("  {} Logged in as {} ({})",
+                        "●".green(),
+                        profile.username.cyan().bold(),
+                        profile.email.dimmed(),
+                    );
+                }
+                Err(_) => {
+                    // Token exists but server call failed — show local email as fallback
+                    match &global_auth.email {
+                        Some(email) => println!("  {} Logged in as {} {}",
+                            "●".yellow(),
+                            email.cyan(),
+                            "(could not reach server)".dimmed(),
+                        ),
+                        None => println!("  {} Logged in {}", "●".yellow(), "(could not verify)".dimmed()),
+                    }
+                }
+            }
+        }
         None => println!("  {} Not logged in  (run `greenbyte login`)", "●".red()),
     }
 
@@ -56,8 +84,6 @@ pub async fn show() -> Result<(), String> {
     // ── Token status ─────────────────────────────────────────────────────────
     let token_status = if config.auth_token.is_some() { "present".green() } else { "missing".red() };
     println!("  {} Token:    {}", "●".green(), token_status);
-
-    // ── Local commits ────────────────────────────────────────────────────────
     let logs = load_logs().unwrap_or_default();
     let count = logs.commits.len();
     if count == 0 {
@@ -76,3 +102,22 @@ pub async fn show() -> Result<(), String> {
     println!("{}", "─────────────────────────────────────────────────────".dimmed());
     Ok(())
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async fn fetch_me(token: &str) -> Result<UserProfile, String> {
+    let client = reqwest::Client::new();
+    let res = client
+        .get(format!("{}/users/me", server_url()))
+        .bearer_auth(token)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("Server returned {}", res.status()));
+    }
+
+    res.json::<UserProfile>().await
+        .map_err(|e| format!("Parse error: {}", e))
+}
