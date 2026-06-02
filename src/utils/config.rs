@@ -25,3 +25,20 @@ pub fn write_env_file(content: &str) -> Result<(), String> {
     std::fs::write(env_file_path(), content)
         .map_err(|e| format!("Could not write .env: {}", e))
 }
+
+/// Scans the current directory for `.env*` files (e.g. `.env`, `.env.local`, `.env.production`).
+/// Returns a sorted list of file paths.
+pub fn scan_env_files() -> Vec<std::path::PathBuf> {
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(".") {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with(".env") && entry.path().is_file() {
+                results.push(entry.path());
+            }
+        }
+    }
+    results.sort();
+    results
+}

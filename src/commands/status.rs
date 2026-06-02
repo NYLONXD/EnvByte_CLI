@@ -1,16 +1,9 @@
 use colored::Colorize;
-use serde::Deserialize;
 use crate::utils::{
     config::{env_file_path, server_url},
     local_store::{load_config, load_logs, config_exists, load_global_auth},
     mac::get_device_mac,
 };
-
-#[derive(Deserialize)]
-struct UserProfile {
-    username: String,
-    email: String,
-}
 
 /// `greenbyte status`
 /// Shows the current state of the project — linked project, last commit, .env presence.
@@ -22,15 +15,16 @@ pub async fn show() -> Result<(), String> {
     match &global_auth.auth_token {
         Some(token) => {
             match fetch_me(token).await {
-                Ok(profile) => {
+                Ok((username, email)) => {
                     println!("  {} Logged in as {} ({})",
                         "●".green(),
-                        profile.username.cyan().bold(),
-                        profile.email.dimmed(),
+                        username.cyan().bold(),
+                        email.dimmed(),
                     );
                 }
-                Err(_) => {
+                Err(e) => {
                     // Token exists but server call failed — show local email as fallback
+                    eprintln!("  {} Debug: {}", "⚠".yellow(), e);
                     match &global_auth.email {
                         Some(email) => println!("  {} Logged in as {} {}",
                             "●".yellow(),
@@ -105,7 +99,7 @@ pub async fn show() -> Result<(), String> {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async fn fetch_me(token: &str) -> Result<UserProfile, String> {
+async fn fetch_me(token: &str) -> Result<(String, String), String> {
     let client = reqwest::Client::new();
     let res = client
         .get(format!("{}/users/me", server_url()))
@@ -118,6 +112,18 @@ async fn fetch_me(token: &str) -> Result<UserProfile, String> {
         return Err(format!("Server returned {}", res.status()));
     }
 
-    res.json::<UserProfile>().await
-        .map_err(|e| format!("Parse error: {}", e))
-}
+    // Parse as Value so extra MongoDB fields (_id, files, owner, etc.) don't break us
+    let body: serde_json::Value = res.json().await
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    let username = body["username"]
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
+    let email = body["email"]
+        .as_str()
+        .unwrap_or("unknown")
+        .to_string();
+
+    Ok((username, email))
+}
