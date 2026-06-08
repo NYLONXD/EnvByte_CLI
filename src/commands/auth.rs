@@ -52,8 +52,14 @@ pub async fn register() -> Result<(), String> {
     spinner.finish_and_clear();
 
     if !res.status().is_success() {
-        let msg: serde_json::Value = res.json().await.unwrap_or_default();
-        return Err(format!("Registration failed: {}", msg["message"].as_str().unwrap_or("unknown")));
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+
+        return Err(format!(
+            "Registration failed ({}): {}",
+            status,
+            body
+        ));
     }
 
     let data: AuthResponse = res.json().await
@@ -83,18 +89,31 @@ pub async fn login() -> Result<(), String> {
     let client = reqwest::Client::new();
     let res = client
         .post(format!("{}/auth/login", server_url()))
-        .json(&LoginRequest { email: email.clone(), password })
+        .json(&LoginRequest {
+            email: email.clone(),
+            password,
+        })
         .send()
         .await
         .map_err(|e| format!("Network error: {}", e))?;
 
     spinner.finish_and_clear();
 
-    if !res.status().is_success() {
-        return Err("Invalid email or password.".to_string());
+    let status = res.status();
+
+    if !status.is_success() {
+        let body = res.text().await.unwrap_or_else(|_| "Unable to read response body".to_string());
+
+        return Err(format!(
+            "Login failed ({}): {}",
+            status,
+            body
+        ));
     }
 
-    let data: AuthResponse = res.json().await
+    let data: AuthResponse = res
+        .json()
+        .await
         .map_err(|e| format!("Response parse error: {}", e))?;
 
     save_global_auth(&GlobalAuth {
@@ -103,7 +122,12 @@ pub async fn login() -> Result<(), String> {
         user_id: Some(data.user_id),
     })?;
 
-    println!("{} Logged in as {}", "✓".green().bold(), email.cyan());
+    println!(
+        "{} Logged in as {}",
+        "✓".green().bold(),
+        email.cyan()
+    );
+
     Ok(())
 }
 
