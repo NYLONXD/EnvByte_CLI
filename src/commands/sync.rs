@@ -1,22 +1,41 @@
-use colored::Colorize;
 use crate::utils::{
-    config::{server_url, write_env_file, scan_env_files},
-    local_store::{load_global_auth, LocalCommit, append_commit},
-    crypto::{encrypt_env, decrypt_env, EncryptedPayload},
+    config::{
+        ensure_file_size, http_client, response_error, scan_env_files, validate_env_filename,
+        write_named_env_file,
+    },
+    crypto::{decrypt_env, encrypt_env, read_master_key, EncryptedPayload},
+    local_store::{append_commit, load_config, LocalCommit},
     mac::get_device_mac,
 };
+use colored::Colorize;
 
 /// `greenbyte push --message "..."`
 /// Scans for local .env* files, lets the user pick one, encrypts the content,
 /// and sends only the encrypted string to the server.
-pub async fn push(message: String) -> Result<(), String> {
+pub async fn push(message: String, requested_file: Option<String>) -> Result<(), String> {
+    let config = load_config()?;
+    let project_id = config
+        .project_id
+        .clone()
+        .ok_or("The local project configuration has no project ID.")?;
     // ── Require login ──────────────────────────────────────────────────────
-    let auth = load_global_auth()?;
-    let auth_token = auth.auth_token
-        .ok_or("Not logged in. Run `greenbyte login` first.")?;
+    let auth_token =
+        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
 
     // ── Scan for .env* files ───────────────────────────────────────────────
-    let env_files = scan_env_files();
+    let env_files = if let Some(filename) = requested_file {
+        validate_env_filename(&filename)?;
+        let path = std::path::PathBuf::from(filename);
+        let kind = std::fs::symlink_metadata(&path)
+            .map_err(|e| format!("Could not inspect {}: {e}", path.display()))?
+            .file_type();
+        if !kind.is_file() {
+            return Err(format!("{} is not a regular file.", path.display()));
+        }
+        vec![path]
+    } else {
+        scan_env_files()
+    };
     if env_files.is_empty() {
         return Err("No .env files found in the current directory.".to_string());
     }
@@ -31,7 +50,8 @@ pub async fn push(message: String) -> Result<(), String> {
             println!("  [{}] {}", (i + 1).to_string().cyan(), path.display());
         }
         let choice = prompt(&format!("Select file (1-{}): ", env_files.len()))?;
-        let idx: usize = choice.parse::<usize>()
+        let idx: usize = choice
+            .parse::<usize>()
             .map_err(|_| "Invalid selection.")?
             .checked_sub(1)
             .ok_or("Invalid selection.")?;
@@ -47,29 +67,44 @@ pub async fn push(message: String) -> Result<(), String> {
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
+    ensure_file_size(&selected_path)?;
     let env_content = std::fs::read_to_string(&selected_path)
         .map_err(|e| format!("Could not read {}: {}", filename, e))?;
 
-    println!("  {} Read {} ({} bytes)", "●".green(), filename.cyan(), env_content.len());
+    println!(
+        "  {} Read {} ({} bytes)",
+        "●".green(),
+        filename.cyan(),
+        env_content.len()
+    );
 
     // ── Encrypt on the CLI side ────────────────────────────────────────────
     let mac = get_device_mac()?;
-    let master_key = prompt_master_key()?;
+    let master_key = read_master_key()?;
     let encrypted = encrypt_env(&env_content, &master_key, &mac)?;
 
     println!("  {} Encrypted successfully", "●".green());
 
+    // Generated before the request so a network retry remains idempotent and
+    // local/remote history can share the same stable address.
+    let commit_id = uuid::Uuid::new_v4().to_string();
+
     // ── Send only the encrypted string to the server ───────────────────────
     let spinner = start_spinner("Pushing encrypted env to server...");
 
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let res = client
-        .post(format!("{}/users/me/env", server_url()))
+        .post(format!(
+            "{}/users/me/env",
+            config.server_url.trim_end_matches('/')
+        ))
         .bearer_auth(&auth_token)
         .json(&serde_json::json!({
             "filename": filename,
             "content": encrypted.data,
             "message": message,
+            "project_id": project_id,
+            "commit_id": commit_id,
         }))
         .send()
         .await
@@ -78,22 +113,27 @@ pub async fn push(message: String) -> Result<(), String> {
     spinner.finish_and_clear();
 
     if !res.status().is_success() {
-        let msg: serde_json::Value = res.json().await.unwrap_or_default();
-        return Err(format!("Push failed: {}",
-            msg["message"].as_str()
-                .or(msg["error"].as_str())
-                .unwrap_or("unknown")));
+        return Err(response_error(res, "Push").await);
     }
 
+    let response: serde_json::Value = res.json().await.unwrap_or_default();
+    let remote_commit_id = response["commit_id"]
+        .as_str()
+        .or_else(|| response["address"].as_str())
+        .or_else(|| response["id"].as_str())
+        .map(String::from);
+
     // ── Also save as a local commit ────────────────────────────────────────
-    let commit_id = uuid::Uuid::new_v4().to_string();
     let local_commit = LocalCommit {
         id: commit_id.clone(),
         message: message.clone(),
         timestamp: chrono::Utc::now(),
         env_snapshot: encrypted.data.clone(),
+        filename: Some(filename.clone()),
+        project_id: Some(project_id),
+        remote_commit_id: remote_commit_id.or_else(|| Some(commit_id.clone())),
     };
-    let _ = append_commit(local_commit);
+    append_commit(local_commit)?;
 
     println!("{} Pushed successfully!", "✓".green().bold());
     println!("  File:    {}", filename.cyan());
@@ -104,18 +144,26 @@ pub async fn push(message: String) -> Result<(), String> {
 
 /// `greenbyte pull`
 /// Fetches the encrypted env string from the server and decrypts it locally.
-pub async fn pull() -> Result<(), String> {
+pub async fn pull(requested_file: Option<String>, force: bool) -> Result<(), String> {
+    let config = load_config()?;
+    let project_id = config
+        .project_id
+        .clone()
+        .ok_or("The local project configuration has no project ID.")?;
     // ── Require login ──────────────────────────────────────────────────────
-    let auth = load_global_auth()?;
-    let auth_token = auth.auth_token
-        .ok_or("Not logged in. Run `greenbyte login` first.")?;
+    let auth_token =
+        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
 
     // ── Fetch encrypted env from server ────────────────────────────────────
     let spinner = start_spinner("Pulling encrypted env from server...");
 
-    let client = reqwest::Client::new();
+    let client = http_client()?;
     let res = client
-        .get(format!("{}/users/me/env", server_url()))
+        .get(format!(
+            "{}/users/me/env",
+            config.server_url.trim_end_matches('/')
+        ))
+        .query(&[("project_id", &project_id)])
         .bearer_auth(&auth_token)
         .send()
         .await
@@ -124,14 +172,17 @@ pub async fn pull() -> Result<(), String> {
     spinner.finish_and_clear();
 
     if !res.status().is_success() {
-        return Err("Failed to fetch env. Check your connection and login.".to_string());
+        return Err(response_error(res, "Pull").await);
     }
 
-    let data: serde_json::Value = res.json().await
+    let data: serde_json::Value = res
+        .json()
+        .await
         .map_err(|e| format!("Response parse error: {}", e))?;
 
     // The server returns an array of files — let the user pick if multiple
-    let files = data.as_array()
+    let files = data
+        .as_array()
         .ok_or("Server returned unexpected format.")?;
 
     if files.is_empty() {
@@ -140,7 +191,13 @@ pub async fn pull() -> Result<(), String> {
         return Ok(());
     }
 
-    let selected = if files.len() == 1 {
+    let selected = if let Some(filename) = requested_file {
+        validate_env_filename(&filename)?;
+        files
+            .iter()
+            .find(|file| file["filename"].as_str() == Some(filename.as_str()))
+            .ok_or_else(|| format!("No remote environment file named {filename}."))?
+    } else if files.len() == 1 {
         &files[0]
     } else {
         println!("{}", "Multiple env files found on server:".bold());
@@ -149,7 +206,8 @@ pub async fn pull() -> Result<(), String> {
             println!("  [{}] {}", (i + 1).to_string().cyan(), fname);
         }
         let choice = prompt(&format!("Select file (1-{}): ", files.len()))?;
-        let idx: usize = choice.parse::<usize>()
+        let idx: usize = choice
+            .parse::<usize>()
             .map_err(|_| "Invalid selection.")?
             .checked_sub(1)
             .ok_or("Invalid selection.")?;
@@ -163,43 +221,46 @@ pub async fn pull() -> Result<(), String> {
         .as_str()
         .ok_or("Server returned no encrypted content.")?
         .to_string();
-    let filename = selected["filename"]
-        .as_str()
-        .unwrap_or(".env")
-        .to_string();
+    let filename = selected["filename"].as_str().unwrap_or(".env").to_string();
 
     // ── Decrypt on the CLI side ────────────────────────────────────────────
     let mac = get_device_mac()?;
-    let master_key = prompt_master_key()?;
+    let master_key = read_master_key()?;
 
-    let payload = EncryptedPayload { data: encrypted_data };
+    let payload = EncryptedPayload {
+        data: encrypted_data,
+    };
     let decrypted = decrypt_env(&payload, &master_key, &mac)?;
 
     // ── Write to the local file ────────────────────────────────────────────
-    if filename == ".env" {
-        write_env_file(&decrypted)?;
-    } else {
-        std::fs::write(&filename, &decrypted)
-            .map_err(|e| format!("Could not write {}: {}", filename, e))?;
+    if std::path::Path::new(&filename).exists() && !force {
+        let confirmation = prompt(&format!("{filename} already exists. Overwrite it? [y/N]: "))?;
+        if confirmation.to_lowercase() != "y" {
+            println!("Aborted.");
+            return Ok(());
+        }
     }
+    write_named_env_file(&filename, &decrypted)?;
 
-    println!("{} {} synced successfully!", "✓".green().bold(), filename.cyan());
+    println!(
+        "{} {} synced successfully!",
+        "✓".green().bold(),
+        filename.cyan()
+    );
     println!("  {} bytes decrypted and written.", decrypted.len());
     Ok(())
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn prompt_master_key() -> Result<String, String> {
-    rpassword::prompt_password("Master Key: ").map_err(|e| e.to_string())
-}
-
 fn prompt(label: &str) -> Result<String, String> {
     use std::io::{self, Write};
     print!("{}", label);
     io::stdout().flush().map_err(|e| e.to_string())?;
     let mut input = String::new();
-    io::stdin().read_line(&mut input).map_err(|e| e.to_string())?;
+    io::stdin()
+        .read_line(&mut input)
+        .map_err(|e| e.to_string())?;
     Ok(input.trim().to_string())
 }
 

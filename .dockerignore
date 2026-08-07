@@ -1,0 +1,8 @@
+target/
+.git/
+.github/
+.greenbyte/
+.env
+.env.*
+!.env.example
+*.log

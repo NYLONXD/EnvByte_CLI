@@ -14,7 +14,7 @@ pub fn get_device_mac() -> Result<String, String> {
 /// Combines OTT + MAC address to form the refresher token.
 /// refresher_token = SHA256(ott + mac_address)
 pub fn make_refresher_token(ott: &str, mac: &str) -> String {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
     let input = format!("{}{}", ott, mac);
     let hash = Sha256::digest(input.as_bytes());
     hex::encode(hash)

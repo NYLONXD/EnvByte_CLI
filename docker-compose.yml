@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: greenbyte
+      POSTGRES_USER: greenbyte
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-greenbyte-local-change-me}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - greenbyte-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U greenbyte -d greenbyte"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      GREENBYTE_ENV: development
+      GREENBYTE_BIND: 0.0.0.0:3030
+      DATABASE_URL: postgres://greenbyte:${POSTGRES_PASSWORD:-greenbyte-local-change-me}@postgres:5432/greenbyte
+      GREENBYTE_JWT_SECRET: ${GREENBYTE_JWT_SECRET:-local-development-secret-change-before-production}
+      GREENBYTE_EMAIL_MODE: ${GREENBYTE_EMAIL_MODE:-log}
+      RUST_LOG: ${RUST_LOG:-greenbyte_server=info,tower_http=info}
+    ports:
+      - "127.0.0.1:3030:3030"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3030/health/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+volumes:
+  greenbyte-postgres:

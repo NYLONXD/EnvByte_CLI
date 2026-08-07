@@ -1,9 +1,13 @@
 [package]
 name = "greenbyte"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Team .env manager — secure, versioned, collaborative"
 authors = ["Greenbyte"]
+
+[workspace]
+members = ["server"]
+resolver = "2"
 
 [[bin]]
 name = "greenbyte"
@@ -38,14 +42,8 @@ base64 = "0.22"
 # SHA hashing
 sha2 = "0.10"
 
-# HMAC
-hmac = "0.12"
-
 # Get MAC address of the machine
 mac_address = "1.1"
-
-# Read/write dotenv files
-dotenvy = "0.15"
 
 # Colored terminal output
 colored = "2.1"
@@ -67,6 +65,9 @@ rpassword = "7.3"
 
 # Hex encoding/decoding
 hex = "0.4"
+
+# Clear sensitive key material from memory when it is no longer needed
+zeroize = "1.8"
 
 [profile.release]
 opt-level = 3
