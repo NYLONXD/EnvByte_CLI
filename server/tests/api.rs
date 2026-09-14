@@ -18,6 +18,10 @@ use sqlx::PgPool;
 use tokio::sync::Mutex;
 use tower::ServiceExt;
 
+/// The verifier the project is created with. Pushes must present the same one.
+const PROJECT_KEY_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const OTHER_KEY_HASH: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
 #[derive(Default)]
 struct CaptureEmail {
     token: Mutex<Option<String>>,
@@ -123,8 +127,9 @@ async fn account_project_invitation_and_ciphertext_flow(pool: PgPool) {
         "POST",
         "/projects",
         Some(alice_token),
-        json!({"name":"payments","master_key_hash":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}),
-    ).await;
+        json!({"name":"payments","master_key_hash":PROJECT_KEY_HASH}),
+    )
+    .await;
     assert_eq!(project.0, StatusCode::OK);
     let project_id = project.1["project_id"].as_str().unwrap();
 
@@ -133,7 +138,8 @@ async fn account_project_invitation_and_ciphertext_flow(pool: PgPool) {
         "filename":".env",
         "content":"greenbyte:v2:opaque",
         "message":"initial",
-        "commit_id":"11111111-1111-4111-8111-111111111111"
+        "commit_id":"11111111-1111-4111-8111-111111111111",
+        "master_key_hash":PROJECT_KEY_HASH
     });
     let pushed = call_json(
         &router,
@@ -155,6 +161,24 @@ async fn account_project_invitation_and_ciphertext_flow(pool: PgPool) {
     .await;
     assert_eq!(retried.0, StatusCode::OK);
     assert_eq!(retried.1["commit_id"], pushed.1["commit_id"]);
+
+    // Content encrypted under a different key must never reach storage.
+    let wrong_key = call_json(
+        &router,
+        "POST",
+        "/users/me/env",
+        Some(alice_token),
+        json!({
+            "project_id":project_id,
+            "filename":".env",
+            "content":"greenbyte:v2:encrypted-with-the-wrong-key",
+            "message":"oops",
+            "commit_id":"22222222-2222-4222-8222-222222222222",
+            "master_key_hash":OTHER_KEY_HASH
+        }),
+    )
+    .await;
+    assert_eq!(wrong_key.0, StatusCode::CONFLICT);
 
     let history = call_json(
         &router,
@@ -188,21 +212,53 @@ async fn account_project_invitation_and_ciphertext_flow(pool: PgPool) {
     assert_eq!(invited.0, StatusCode::OK);
     let ott = email.token.lock().await.clone().unwrap();
 
-    let joined = call_json(
+    // An invitation is not a credential. It cannot be redeemed anonymously,
+    // and it cannot be redeemed by whoever it was forwarded to.
+    let join_body = json!({
+        "ott":ott,
+        "refresher_token":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "mac_address":"aabbccddeeff"
+    });
+
+    let anonymous = call_json(
         &router,
         "POST",
         "/projects/payments/join",
         None,
-        json!({"ott":ott,"refresher_token":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","mac_address":"aabbccddeeff"}),
-    ).await;
-    assert_eq!(joined.0, StatusCode::OK);
-    let joined_token = joined.1["auth_token"].as_str().unwrap();
+        join_body.clone(),
+    )
+    .await;
+    assert_eq!(anonymous.0, StatusCode::UNAUTHORIZED);
 
+    let wrong_account = call_json(
+        &router,
+        "POST",
+        "/projects/payments/join",
+        Some(alice_token),
+        join_body.clone(),
+    )
+    .await;
+    assert_eq!(wrong_account.0, StatusCode::FORBIDDEN);
+
+    let joined = call_json(
+        &router,
+        "POST",
+        "/projects/payments/join",
+        Some(bob_token),
+        join_body,
+    )
+    .await;
+    assert_eq!(joined.0, StatusCode::OK);
+    // The response must never hand out account credentials.
+    assert!(joined.1["auth_token"].is_null());
+    assert!(joined.1["refresh_token"].is_null());
+
+    // Bob reaches the project with the session he already had.
     let pulled = call_json(
         &router,
         "GET",
         &format!("/users/me/env?project_id={project_id}"),
-        Some(joined_token),
+        Some(bob_token),
         Value::Null,
     )
     .await;

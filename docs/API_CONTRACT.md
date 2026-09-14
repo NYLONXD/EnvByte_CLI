@@ -54,7 +54,9 @@ Authenticated. Request: `{ "name", "master_key_hash" }`. The hash is a high-entr
 
 ### `POST /projects/{project_name}/join`
 
-Request: `{ "ott", "refresher_token", "mac_address" }`. Atomically consume the OTT and return `{ "project_id", "auth_token", "soft_token" }`.
+Authenticated. Request: `{ "ott", "refresher_token", "mac_address" }`, where `mac_address` is optional. Atomically consume the OTT and return `{ "project_id", "soft_token" }`.
+
+An invitation proves that its holder was invited, never that they are the invitee, so this endpoint must reject a caller whose session belongs to any account other than the one named on the invitation, and must never return account credentials. A forwarded or intercepted invitation therefore grants nothing on its own.
 
 ### `POST /projects/{project_id}/collaborators`
 
@@ -84,11 +86,14 @@ Authenticated. Request:
   "commit_id": "client-generated-uuid",
   "filename": ".env.production",
   "content": "greenbyte:v2:<base64-envelope>",
-  "message": "rotate database password"
+  "message": "rotate database password",
+  "master_key_hash": "verifier-for-the-key-the-content-was-encrypted-under"
 }
 ```
 
 Validate project membership and filename, then atomically create a remote history entry. Return `{ "commit_id": "opaque-id" }`.
+
+`master_key_hash` is required and must equal the verifier registered when the project was created; compare it in constant time and reject a mismatch with `409 Conflict`. Because the server cannot decrypt, this is the only defence against a member holding the wrong key replacing the current version with a payload nobody else can read.
 
 `commit_id` makes pushes idempotent. Repeating an identical request with the same ID returns the existing commit; reusing the ID with different content or metadata returns `409 Conflict`.
 

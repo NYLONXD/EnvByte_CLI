@@ -2,7 +2,6 @@ use crate::utils::{
     config::read_env_file,
     crypto::{encrypt_env, read_master_key},
     local_store::{append_commit, load_config, LocalCommit},
-    mac::get_device_mac,
 };
 use colored::Colorize;
 use uuid::Uuid;
@@ -13,10 +12,9 @@ use uuid::Uuid;
 pub async fn commit(message: String) -> Result<(), String> {
     let env_content = read_env_file()?;
     let config = load_config()?;
-    let mac = get_device_mac()?;
     let master_key = read_master_key()?;
 
-    let encrypted = encrypt_env(&env_content, &master_key, &mac)?;
+    let encrypted = encrypt_env(&env_content, &master_key)?;
     let id = Uuid::new_v4().to_string();
 
     let commit = LocalCommit {

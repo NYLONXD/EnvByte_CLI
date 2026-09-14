@@ -33,7 +33,8 @@ pub struct EncryptedPayload {
 /// Uses Argon2id for key stretching — slow by design (protects against brute force).
 fn derive_legacy_key(master_key: &str, mac_address: &str) -> Result<[u8; 32], String> {
     // Salt = first 16 bytes of mac_address padded/truncated
-    let salt_str = format!("{:0<16}", &mac_address[..mac_address.len().min(16)]);
+    let truncated: String = mac_address.chars().take(16).collect();
+    let salt_str = format!("{truncated:0<16}");
     let salt =
         SaltString::encode_b64(salt_str.as_bytes()).map_err(|e| format!("Salt error: {}", e))?;
 
@@ -62,13 +63,10 @@ fn derive_key_v2(master_key: &str, salt: &[u8]) -> Result<[u8; 32], String> {
 }
 
 /// Encrypts plaintext (the .env content) using AES-256-GCM.
-/// Key is derived from master_key + mac_address.
-/// Returns base64-encoded nonce + ciphertext.
-pub fn encrypt_env(
-    plaintext: &str,
-    master_key: &str,
-    _mac_address: &str,
-) -> Result<EncryptedPayload, String> {
+///
+/// The key is derived from the project master key and a fresh random salt, so
+/// the resulting envelope is portable to every collaborator and device.
+pub fn encrypt_env(plaintext: &str, master_key: &str) -> Result<EncryptedPayload, String> {
     let mut salt = [0_u8; SALT_LEN];
     OsRng.fill_bytes(&mut salt);
     let mut key_bytes = derive_key_v2(master_key, &salt)?;
@@ -104,12 +102,14 @@ pub fn encrypt_env(
     })
 }
 
-/// Decrypts a payload encrypted with encrypt_env().
-/// Requires the same master_key + mac_address used during encryption.
+/// Decrypts a payload produced by `encrypt_env`.
+///
+/// `mac_address` is only consulted for legacy (pre-v2) envelopes, which bound
+/// the key to the device that wrote them. Current envelopes ignore it.
 pub fn decrypt_env(
     payload: &EncryptedPayload,
     master_key: &str,
-    mac_address: &str,
+    mac_address: Option<&str>,
 ) -> Result<String, String> {
     if payload.data.len() > MAX_ENCRYPTED_PAYLOAD_LEN {
         return Err("Encrypted payload exceeds the 16 MiB safety limit".to_string());
@@ -162,8 +162,13 @@ fn decrypt_v2(encoded: &str, master_key: &str) -> Result<String, String> {
 fn decrypt_legacy(
     payload: &EncryptedPayload,
     master_key: &str,
-    mac_address: &str,
+    mac_address: Option<&str>,
 ) -> Result<String, String> {
+    let mac_address = mac_address.ok_or(
+        "This snapshot uses the legacy device-bound format, which can only be decrypted on the \
+         machine that created it while that machine exposes a network interface. Re-push it from \
+         that machine to upgrade it to the portable format.",
+    )?;
     let mut key_bytes = derive_legacy_key(master_key, mac_address)?;
     let key = Key::<Aes256Gcm>::from_slice(&key_bytes);
     let cipher = Aes256Gcm::new(key);
@@ -187,6 +192,20 @@ fn decode_plaintext(plaintext: Result<Vec<u8>, aes_gcm::Error>) -> Result<String
     let plaintext =
         plaintext.map_err(|_| "Decryption failed — wrong key or corrupted data".to_string())?;
     String::from_utf8(plaintext).map_err(|e| format!("UTF-8 decode error: {e}"))
+}
+
+/// Computes the server-side verifier for a project master key.
+///
+/// This is a plain domain-separated SHA-256 rather than a slow hash because the
+/// key is always 256 bits of `generate_token(32)` output, which is not
+/// guessable. If user-chosen master keys are ever accepted, this must become a
+/// salted memory-hard hash before the verifier is stored anywhere.
+pub fn master_key_verifier(master_key: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(b"greenbyte-project-key-v2:");
+    hasher.update(master_key.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 /// Generates a cryptographically secure random token (hex string).
@@ -217,43 +236,52 @@ mod tests {
 
     #[test]
     fn test_encrypt_decrypt_roundtrip() {
-        let plaintext = "DB_HOST=localhost\nDB_PORT=5432\nAPI_KEY=supersecret";
+        let plaintext = "DB_HOST=localhost
+DB_PORT=5432
+API_KEY=supersecret";
         let master_key = "my-master-key-123";
-        let mac = "aabbccddeeff";
 
-        let encrypted = encrypt_env(plaintext, master_key, mac).unwrap();
-        let decrypted = decrypt_env(&encrypted, master_key, mac).unwrap();
+        let encrypted = encrypt_env(plaintext, master_key).unwrap();
+        let decrypted = decrypt_env(&encrypted, master_key, None).unwrap();
 
         assert_eq!(plaintext, decrypted);
     }
 
     #[test]
     fn test_wrong_key_fails() {
-        let plaintext = "SECRET=value";
-        let encrypted = encrypt_env(plaintext, "correct-key", "aabbccddeeff").unwrap();
-        let result = decrypt_env(&encrypted, "wrong-key", "aabbccddeeff");
-        assert!(result.is_err());
+        let encrypted = encrypt_env("SECRET=value", "correct-key").unwrap();
+        assert!(decrypt_env(&encrypted, "wrong-key", None).is_err());
     }
 
     #[test]
     fn test_v2_ciphertext_is_portable_between_devices() {
-        let encrypted = encrypt_env("SECRET=value", "shared-project-key", "device-a").unwrap();
-        let decrypted = decrypt_env(&encrypted, "shared-project-key", "device-b").unwrap();
+        let encrypted = encrypt_env("SECRET=value", "shared-project-key").unwrap();
+        let decrypted = decrypt_env(&encrypted, "shared-project-key", Some("device-b")).unwrap();
         assert_eq!(decrypted, "SECRET=value");
         assert!(encrypted.data.starts_with(ENVELOPE_PREFIX));
     }
 
     #[test]
+    fn test_v2_ciphertext_decrypts_without_any_mac_address() {
+        // Containers and CI runners often expose no network interface at all.
+        let encrypted = encrypt_env("SECRET=value", "shared-project-key").unwrap();
+        assert_eq!(
+            decrypt_env(&encrypted, "shared-project-key", None).unwrap(),
+            "SECRET=value"
+        );
+    }
+
+    #[test]
     fn test_tampered_envelope_fails() {
-        let mut encrypted = encrypt_env("SECRET=value", "key", "device").unwrap();
+        let mut encrypted = encrypt_env("SECRET=value", "key").unwrap();
         encrypted.data.push('A');
-        assert!(decrypt_env(&encrypted, "key", "device").is_err());
+        assert!(decrypt_env(&encrypted, "key", None).is_err());
     }
 
     #[test]
     fn test_random_salt_and_nonce_produce_unique_ciphertext() {
-        let first = encrypt_env("SECRET=value", "key", "device").unwrap();
-        let second = encrypt_env("SECRET=value", "key", "device").unwrap();
+        let first = encrypt_env("SECRET=value", "key").unwrap();
+        let second = encrypt_env("SECRET=value", "key").unwrap();
         assert_ne!(first.data, second.data);
     }
 
@@ -265,7 +293,7 @@ mod tests {
                     data: data.to_string(),
                 },
                 "key",
-                "device",
+                Some("device"),
             );
             assert!(result.is_err());
         }
@@ -275,16 +303,45 @@ mod tests {
     fn test_legacy_ciphertext_remains_decryptable() {
         let master_key = "legacy-key";
         let mac = "aabbccddeeff";
+        let payload = legacy_payload(master_key, mac, b"OLD=value");
+        assert_eq!(
+            decrypt_env(&payload, master_key, Some(mac)).unwrap(),
+            "OLD=value"
+        );
+        assert!(decrypt_env(&payload, master_key, Some("different-device")).is_err());
+    }
+
+    #[test]
+    fn test_legacy_ciphertext_without_a_mac_explains_itself() {
+        let payload = legacy_payload("legacy-key", "aabbccddeeff", b"OLD=value");
+        let error = decrypt_env(&payload, "legacy-key", None).unwrap_err();
+        assert!(error.contains("legacy device-bound format"), "{error}");
+    }
+
+    #[test]
+    fn test_legacy_key_derivation_handles_short_mac_values() {
+        // A one-character identifier used to slice past the end of the string.
+        assert!(derive_legacy_key("key", "a").is_ok());
+        assert!(derive_legacy_key("key", "").is_ok());
+    }
+
+    #[test]
+    fn test_master_key_verifier_is_stable_and_distinct() {
+        let key = generate_token(32);
+        assert_eq!(master_key_verifier(&key), master_key_verifier(&key));
+        assert_eq!(master_key_verifier(&key).len(), 64);
+        assert_ne!(master_key_verifier(&key), master_key_verifier("other"));
+    }
+
+    fn legacy_payload(master_key: &str, mac: &str, plaintext: &[u8]) -> EncryptedPayload {
         let key_bytes = derive_legacy_key(master_key, mac).unwrap();
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-        let ciphertext = cipher.encrypt(&nonce, b"OLD=value".as_slice()).unwrap();
+        let ciphertext = cipher.encrypt(&nonce, plaintext).unwrap();
         let mut combined = nonce.to_vec();
         combined.extend(ciphertext);
-        let payload = EncryptedPayload {
+        EncryptedPayload {
             data: BASE64.encode(combined),
-        };
-        assert_eq!(decrypt_env(&payload, master_key, mac).unwrap(), "OLD=value");
-        assert!(decrypt_env(&payload, master_key, "different-device").is_err());
+        }
     }
 }

@@ -106,16 +106,17 @@ pub async fn show() -> Result<(), String> {
 
     // ── Device MAC ──────────────────────────────────────────────────────────
     match get_device_mac() {
-        Ok(mac) => println!(
+        Some(mac) if mac.len() >= 8 => println!(
             "  {} Device:   {}...{}",
             "●".green(),
             &mac[..4],
             &mac[mac.len() - 4..]
         ),
-        Err(_) => println!(
+        // Only legacy snapshots are device-bound, so this is not a problem.
+        _ => println!(
             "  {} Device:   {}",
-            "●".red(),
-            "MAC address unavailable".red()
+            "●".green(),
+            "no MAC address (not required)".dimmed()
         ),
     }
 

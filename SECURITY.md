@@ -14,7 +14,9 @@ Greenbyte protects environment-file contents from an honest-but-curious storage 
 
 Greenbyte does not protect a device after an attacker obtains the project master key, decrypted `.env` files, process memory, or an active user session. It also cannot recover a lost project key.
 
-Device MAC addresses are identifiers, not secrets or cryptographic factors. They are retained for enrollment compatibility and legacy ciphertext only.
+Device MAC addresses are identifiers, not secrets or cryptographic factors. They are retained for enrollment compatibility and legacy ciphertext only, and every current operation succeeds without one so that containers and CI runners remain supported.
+
+Invitations are authorization to add a named account to a project, not credentials for that account. Redeeming one requires an existing authenticated session belonging to the invited user and never returns an access or refresh token, so a forwarded or intercepted invitation cannot become a login.
 
 ## Operator requirements
 
@@ -23,6 +25,8 @@ Device MAC addresses are identifiers, not secrets or cryptographic factors. They
 - Store only encrypted environment payloads; never request or log master keys.
 - Rate-limit login, registration, join, invitation, and refresh endpoints.
 - Make OTTs single-use, store only their hashes, and expire them within 24 hours.
+- Require an authenticated session to redeem an invitation, and bind it to the invited account.
+- Reject pushed ciphertext whose master-key verifier does not match the project's.
 - Rotate signing keys and short-lived access tokens; revoke refresh tokens on logout or device removal.
 - Enforce project membership on every environment and history operation.
 - Keep immutable, secret-free audit events for membership and data mutations.

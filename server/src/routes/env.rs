@@ -4,6 +4,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
+use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::{
@@ -24,6 +25,11 @@ pub struct PushRequest {
     filename: String,
     content: String,
     message: String,
+    /// Verifier for the project master key the content was encrypted under.
+    /// The server cannot decrypt, so this is the only way to stop a member
+    /// with the wrong key from overwriting the file with an unreadable
+    /// payload.
+    master_key_hash: String,
 }
 
 #[derive(Serialize)]
@@ -62,6 +68,7 @@ pub async fn push(
             "commit message must be 1-500 characters".to_string(),
         ));
     }
+    verify_master_key(&state, request.project_id, &request.master_key_hash).await?;
     if let Some(commit_id) = request.commit_id {
         let existing = sqlx::query(
             "SELECT f.project_id, f.filename, v.encrypted_content, v.message
@@ -221,6 +228,37 @@ pub async fn rollback_to_commit(
     .execute(&mut *transaction)
     .await?;
     transaction.commit().await?;
+    Ok(())
+}
+
+/// Rejects content encrypted under anything but the project's master key.
+///
+/// Compared in constant time so the stored verifier cannot be recovered by
+/// timing a series of guesses.
+async fn verify_master_key(
+    state: &AppState,
+    project_id: Uuid,
+    presented: &str,
+) -> Result<(), ApiError> {
+    let expected =
+        sqlx::query_scalar::<_, String>("SELECT master_key_hash FROM projects WHERE id = $1")
+            .bind(project_id)
+            .fetch_optional(&state.pool)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("project not found".to_string()))?;
+    let presented = presented.to_lowercase();
+    if presented.len() != expected.len()
+        || presented.as_bytes().ct_eq(expected.as_bytes()).unwrap_u8() != 1
+    {
+        return Err(ApiError::Conflict(
+            concat!(
+                "this content was encrypted with a different master key than the project's; ",
+                "check GREENBYTE_MASTER_KEY or the key you entered, because pushing it would ",
+                "leave the file unreadable for everyone else"
+            )
+            .to_string(),
+        ));
+    }
     Ok(())
 }
 

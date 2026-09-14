@@ -3,7 +3,7 @@ use crate::utils::{
         ensure_file_size, http_client, response_error, scan_env_files, validate_env_filename,
         write_named_env_file,
     },
-    crypto::{decrypt_env, encrypt_env, read_master_key, EncryptedPayload},
+    crypto::{decrypt_env, encrypt_env, master_key_verifier, read_master_key, EncryptedPayload},
     local_store::{append_commit, load_config, LocalCommit},
     mac::get_device_mac,
 };
@@ -79,9 +79,8 @@ pub async fn push(message: String, requested_file: Option<String>) -> Result<(),
     );
 
     // ── Encrypt on the CLI side ────────────────────────────────────────────
-    let mac = get_device_mac()?;
     let master_key = read_master_key()?;
-    let encrypted = encrypt_env(&env_content, &master_key, &mac)?;
+    let encrypted = encrypt_env(&env_content, &master_key)?;
 
     println!("  {} Encrypted successfully", "●".green());
 
@@ -105,6 +104,7 @@ pub async fn push(message: String, requested_file: Option<String>) -> Result<(),
             "message": message,
             "project_id": project_id,
             "commit_id": commit_id,
+            "master_key_hash": master_key_verifier(&master_key),
         }))
         .send()
         .await
@@ -224,13 +224,13 @@ pub async fn pull(requested_file: Option<String>, force: bool) -> Result<(), Str
     let filename = selected["filename"].as_str().unwrap_or(".env").to_string();
 
     // ── Decrypt on the CLI side ────────────────────────────────────────────
-    let mac = get_device_mac()?;
+    let mac = get_device_mac();
     let master_key = read_master_key()?;
 
     let payload = EncryptedPayload {
         data: encrypted_data,
     };
-    let decrypted = decrypt_env(&payload, &master_key, &mac)?;
+    let decrypted = decrypt_env(&payload, &master_key, mac.as_deref())?;
 
     // ── Write to the local file ────────────────────────────────────────────
     if std::path::Path::new(&filename).exists() && !force {

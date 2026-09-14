@@ -102,13 +102,13 @@ async fn rollback_local(local_id: String) -> Result<(), String> {
         return Ok(());
     }
 
-    let mac = get_device_mac()?;
+    let mac = get_device_mac();
     let master_key = read_master_key()?;
 
     let payload = EncryptedPayload {
         data: commit.env_snapshot.clone(),
     };
-    let decrypted = decrypt_env(&payload, &master_key, &mac)?;
+    let decrypted = decrypt_env(&payload, &master_key, mac.as_deref())?;
 
     let filename = commit.filename.as_deref().unwrap_or(".env");
     write_named_env_file(filename, &decrypted)?;

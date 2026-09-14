@@ -22,7 +22,7 @@ Share a project master key with approved collaborators through a separate secure
 
 ## Features
 
-- Client-side authenticated encryption
+- Client-side authenticated encryption, portable across devices and containers
 - Signup, email verification, login, refresh sessions, logout, and password reset
 - Project creation and device/project initialization
 - Owner, admin, member, and viewer permissions
@@ -165,12 +165,14 @@ greenbyte add teammate@example.com
 greenbyte members
 ```
 
-The teammate retrieves the invitation token from their email, or from API logs in local mode, then runs:
+The teammate retrieves the invitation token from their email, or from API logs in local mode, then signs in and joins:
 
 ```bash
-greenbyte register
+greenbyte register   # or `greenbyte login` for an existing account
 greenbyte init my-application
 ```
+
+Joining is performed as the signed-in account, and the server accepts the token only from the account it was issued to. An invitation is therefore not a credential: forwarding the email to somebody else gives them nothing, and the response contains no login tokens.
 
 The owner must share the project master key separately through a secure channel. Invitation tokens authorize membership but do not contain the encryption key.
 
@@ -236,6 +238,8 @@ Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*
 |---|---|---|
 | `GREENBYTE_SERVER` | `http://localhost:3030` | API URL; non-local servers must use HTTPS |
 | `GREENBYTE_MASTER_KEY` | unset | Project key for non-interactive automation |
+
+Every push sends a verifier for the key it encrypted with, and the server rejects content encrypted under anything but the project's master key. A mistyped or stale `GREENBYTE_MASTER_KEY` fails immediately instead of replacing the file with a payload the rest of the team cannot read.
 
 For CI, inject the master key through the runner's secret environment:
 

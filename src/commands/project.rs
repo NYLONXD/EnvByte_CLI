@@ -1,7 +1,7 @@
 use crate::utils::{
     config::{http_client, response_error, server_url, validate_server_url},
-    crypto::generate_token,
-    local_store::{config_exists, save_config, save_global_auth, GlobalAuth, LocalConfig},
+    crypto::{generate_token, master_key_verifier},
+    local_store::{config_exists, save_config, LocalConfig},
     mac::get_device_mac,
 };
 use colored::Colorize;
@@ -55,8 +55,8 @@ pub async fn create(project_name: String) -> Result<(), String> {
     println!("   Every collaborator needs this key through a separate secure channel.");
     println!("   Store it in a password manager.\n");
 
-    // Hash master key before sending to server (server never sees plaintext key)
-    let master_key_hash = hash_master_key(&master_key);
+    // Send only a verifier for the key, never the key itself.
+    let master_key_hash = master_key_verifier(&master_key);
 
     let spinner = start_spinner("Creating project on server...");
 
@@ -125,17 +125,22 @@ pub async fn init(project_name: String) -> Result<(), String> {
     );
     println!();
 
+    // An invitation proves you were invited, not who you are. Joining happens
+    // as the signed-in account, so a leaked token cannot become a session.
+    let auth_token = crate::commands::auth::access_token(&server, None).await?;
+
     let ott = prompt("Enter your One-Time Token (from email): ")?;
-    let mac = get_device_mac()?;
+    let mac = get_device_mac();
 
     // Build refresher token = SHA256(ott + mac)
-    let refresher_token = crate::utils::mac::make_refresher_token(&ott, &mac);
+    let refresher_token = crate::utils::mac::make_refresher_token(&ott, mac.as_deref());
 
     let spinner = start_spinner("Verifying token...");
 
     let client = http_client()?;
     let res = client
         .post(format!("{server}/projects/{project_name}/join"))
+        .bearer_auth(&auth_token)
         .json(&serde_json::json!({
             "ott": ott,
             "refresher_token": refresher_token,
@@ -160,17 +165,11 @@ pub async fn init(project_name: String) -> Result<(), String> {
         project_name: Some(project_name.clone()),
         project_id: data["project_id"].as_str().map(String::from),
         server_url: server,
-        auth_token: data["auth_token"].as_str().map(String::from),
-        refresh_token: data["refresh_token"].as_str().map(String::from),
+        auth_token: Some(auth_token),
+        refresh_token: None,
         soft_token: data["soft_token"].as_str().map(String::from),
         refresher_token: Some(refresher_token),
         master_key_hint: None,
-    })?;
-    save_global_auth(&GlobalAuth {
-        email: None,
-        auth_token: data["auth_token"].as_str().map(String::from),
-        user_id: None,
-        refresh_token: data["refresh_token"].as_str().map(String::from),
     })?;
 
     println!(
@@ -178,20 +177,13 @@ pub async fn init(project_name: String) -> Result<(), String> {
         "✓".green().bold(),
         project_name.cyan()
     );
-    println!("  Run `greenbyte pull` to get the latest .env.\n");
+    println!("  Ask the project owner for the master key over a secure channel,");
+    println!("  then run `greenbyte pull` to get the latest .env.\n");
     append_to_gitignore()?;
     Ok(())
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-fn hash_master_key(master_key: &str) -> String {
-    use sha2::{Digest, Sha256};
-    let mut hasher = Sha256::new();
-    hasher.update(b"greenbyte-project-key-v2:");
-    hasher.update(master_key.as_bytes());
-    hex::encode(hasher.finalize())
-}
 
 fn append_to_gitignore() -> Result<(), String> {
     let gitignore = std::path::Path::new(".gitignore");

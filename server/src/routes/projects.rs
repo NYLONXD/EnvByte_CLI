@@ -9,7 +9,7 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
-    auth::{access_token, hash_token, issue_refresh_token, random_token, AuthUser},
+    auth::{hash_token, random_token, AuthUser},
     error::ApiError,
     models::Invitation,
     permissions::require_admin,
@@ -37,14 +37,16 @@ pub struct InviteRequest {
 pub struct JoinRequest {
     ott: String,
     refresher_token: String,
-    mac_address: String,
+    #[serde(default)]
+    mac_address: Option<String>,
 }
 
+/// Deliberately carries no account credentials. An invitation proves that the
+/// holder was invited, not that they are the invitee, so it must never be
+/// exchangeable for a session.
 #[derive(Serialize)]
 pub struct JoinResponse {
     project_id: Uuid,
-    auth_token: String,
-    refresh_token: String,
     soft_token: String,
 }
 
@@ -357,12 +359,16 @@ pub async fn audit(
 
 pub async fn join(
     State(state): State<AppState>,
+    user: AuthUser,
     Path(project_name): Path<String>,
     Json(request): Json<JoinRequest>,
 ) -> Result<Json<JoinResponse>, ApiError> {
     if request.ott.len() < 32
         || request.refresher_token.len() != 64
-        || request.mac_address.len() > 64
+        || request
+            .mac_address
+            .as_ref()
+            .is_some_and(|value| value.len() > 64)
     {
         return Err(ApiError::BadRequest(
             "invalid enrollment credentials".to_string(),
@@ -383,6 +389,11 @@ pub async fn join(
     .ok_or(ApiError::Unauthorized)?;
     if invitation.consumed_at.is_some() || invitation.expires_at <= Utc::now() {
         return Err(ApiError::Unauthorized);
+    }
+    // The invitation names one account. Holding the token is not proof of
+    // being that account, so the caller must already be signed in as them.
+    if invitation.user_id != user.id {
+        return Err(ApiError::Forbidden);
     }
     let soft_token = Zeroizing::new(random_token(32));
     sqlx::query(
@@ -423,11 +434,8 @@ pub async fn join(
     )
     .await?;
     transaction.commit().await?;
-    let refresh = issue_refresh_token(&state.pool, invitation.user_id, &state.config).await?;
     Ok(Json(JoinResponse {
         project_id: invitation.project_id,
-        auth_token: access_token(invitation.user_id, &state.config)?,
-        refresh_token: refresh.to_string(),
         soft_token: soft_token.to_string(),
     }))
 }
