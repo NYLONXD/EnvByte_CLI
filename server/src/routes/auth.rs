@@ -5,12 +5,12 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
-    auth::{
+    error::ApiError,
+    models::User,
+    security::{
         access_token, hash_password, hash_token, issue_refresh_token, random_token,
         rotate_refresh_token, verify_password,
     },
-    error::ApiError,
-    models::User,
     state::AppState,
 };
 

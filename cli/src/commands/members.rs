@@ -1,6 +1,7 @@
-use crate::utils::{
-    config::{http_client, response_error},
-    local_store::load_config,
+use crate::shared::{
+    http::{http_client, response_error},
+    storage::load_config,
+    terminal::{prompt, start_spinner},
 };
 use colored::Colorize;
 
@@ -23,7 +24,8 @@ pub async fn add(email: String) -> Result<(), String> {
         .unwrap_or_else(|| "this project".to_string());
 
     let auth_token =
-        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
+        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
+            .await?;
 
     println!(
         "{}",
@@ -153,37 +155,14 @@ pub async fn change_role(user_id: String, role: String) -> Result<(), String> {
     Ok(())
 }
 
-async fn project_session(
-) -> Result<(crate::utils::local_store::LocalConfig, String, String), String> {
+async fn project_session() -> Result<(crate::shared::storage::LocalConfig, String, String), String>
+{
     let config = load_config()?;
     let project_id = config.project_id.clone().ok_or("No project linked.")?;
     let token =
-        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
+        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
+            .await?;
     Ok((config, project_id, token))
 }
 
-fn prompt(label: &str) -> Result<String, String> {
-    use std::io::{self, Write};
-    print!("{label}");
-    io::stdout().flush().map_err(|e| e.to_string())?;
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| e.to_string())?;
-    Ok(input.trim().to_string())
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-fn start_spinner(msg: &str) -> indicatif::ProgressBar {
-    use indicatif::{ProgressBar, ProgressStyle};
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    pb.set_message(msg.to_string());
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    pb
-}

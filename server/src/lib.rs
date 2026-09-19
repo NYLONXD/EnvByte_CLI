@@ -1,4 +1,3 @@
-pub mod auth;
 pub mod config;
 pub mod email;
 pub mod error;
@@ -6,6 +5,7 @@ pub mod models;
 pub mod permissions;
 pub mod rate_limit;
 pub mod routes;
+pub mod security;
 pub mod state;
 
 use std::{sync::Arc, time::Duration};
@@ -51,7 +51,7 @@ pub fn app(state: AppState) -> Router {
         .route("/users/me", get(routes::users::me))
         .route(
             "/users/me/env",
-            post(routes::env::push).get(routes::env::pull),
+            post(routes::env_files::push).get(routes::env_files::pull),
         )
         .route(
             "/projects",
@@ -74,7 +74,10 @@ pub fn app(state: AppState) -> Router {
             "/projects/{project_id}/rollback",
             post(routes::projects::rollback),
         )
-        .route("/projects/{project_id}/commits", get(routes::env::history))
+        .route(
+            "/projects/{project_id}/commits",
+            get(routes::env_files::history),
+        )
         .route("/projects/{project_id}/audit", get(routes::projects::audit))
         .with_state(state.clone())
         .layer(middleware::from_fn_with_state(

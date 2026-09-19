@@ -8,10 +8,10 @@ use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
 use crate::{
-    auth::AuthUser,
     error::ApiError,
     models::EnvFileResponse,
     permissions::{require_member, require_writer},
+    security::AuthUser,
     state::AppState,
 };
 

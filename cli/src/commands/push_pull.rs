@@ -1,11 +1,10 @@
-use crate::utils::{
-    config::{
-        ensure_file_size, http_client, response_error, scan_env_files, validate_env_filename,
-        write_named_env_file,
-    },
+use crate::shared::{
     crypto::{decrypt_env, encrypt_env, master_key_verifier, read_master_key, EncryptedPayload},
-    local_store::{append_commit, load_config, LocalCommit},
-    mac::get_device_mac,
+    device::get_device_mac,
+    env_files::{ensure_file_size, scan_env_files, validate_env_filename, write_named_env_file},
+    http::{http_client, response_error},
+    storage::{append_commit, load_config, LocalCommit},
+    terminal::{prompt, start_spinner},
 };
 use colored::Colorize;
 
@@ -20,7 +19,8 @@ pub async fn push(message: String, requested_file: Option<String>) -> Result<(),
         .ok_or("The local project configuration has no project ID.")?;
     // ── Require login ──────────────────────────────────────────────────────
     let auth_token =
-        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
+        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
+            .await?;
 
     // ── Scan for .env* files ───────────────────────────────────────────────
     let env_files = if let Some(filename) = requested_file {
@@ -152,7 +152,8 @@ pub async fn pull(requested_file: Option<String>, force: bool) -> Result<(), Str
         .ok_or("The local project configuration has no project ID.")?;
     // ── Require login ──────────────────────────────────────────────────────
     let auth_token =
-        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
+        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
+            .await?;
 
     // ── Fetch encrypted env from server ────────────────────────────────────
     let spinner = start_spinner("Pulling encrypted env from server...");
@@ -252,27 +253,3 @@ pub async fn pull(requested_file: Option<String>, force: bool) -> Result<(), Str
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-fn prompt(label: &str) -> Result<String, String> {
-    use std::io::{self, Write};
-    print!("{}", label);
-    io::stdout().flush().map_err(|e| e.to_string())?;
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| e.to_string())?;
-    Ok(input.trim().to_string())
-}
-
-fn start_spinner(msg: &str) -> indicatif::ProgressBar {
-    use indicatif::{ProgressBar, ProgressStyle};
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    pb.set_message(msg.to_string());
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    pb
-}

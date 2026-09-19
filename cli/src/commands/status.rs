@@ -1,7 +1,8 @@
-use crate::utils::{
-    config::{env_file_path, http_client, server_url},
-    local_store::{config_exists, load_config, load_global_auth, load_logs},
-    mac::get_device_mac,
+use crate::shared::{
+    device::get_device_mac,
+    env_files::env_file_path,
+    http::{http_client, server_url},
+    storage::{config_exists, load_config, load_global_auth, load_logs},
 };
 use colored::Colorize;
 

@@ -1,5 +1,5 @@
 mod commands;
-mod utils;
+mod shared;
 
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -123,21 +123,19 @@ async fn main() {
     let result = match cli.command {
         Commands::Create { project_name } => commands::project::create(project_name).await,
         Commands::Init { project_name } => commands::project::init(project_name).await,
-        Commands::Push { message, file } => commands::sync::push(message, file).await,
-        Commands::Pull { file, force } => commands::sync::pull(file, force).await,
-        Commands::Commit { message } => commands::commit::commit(message).await,
-        Commands::Logs { file, remote } => commands::logs::show_logs(file, remote).await,
+        Commands::Push { message, file } => commands::push_pull::push(message, file).await,
+        Commands::Pull { file, force } => commands::push_pull::pull(file, force).await,
+        Commands::Commit { message } => commands::snapshot::commit(message).await,
+        Commands::Logs { file, remote } => commands::history::show_logs(file, remote).await,
         Commands::Rollback { address, local } => commands::rollback::rollback(address, local).await,
-        Commands::Add { email } => commands::collaborator::add(email).await,
-        Commands::Members => commands::collaborator::members().await,
-        Commands::Remove { user_id } => commands::collaborator::remove(user_id).await,
-        Commands::Role { user_id, role } => {
-            commands::collaborator::change_role(user_id, role).await
-        }
-        Commands::Register => commands::auth::register().await,
-        Commands::Login => commands::auth::login().await,
-        Commands::Logout => commands::auth::logout().await,
-        Commands::ResetPassword => commands::auth::reset_password().await,
+        Commands::Add { email } => commands::members::add(email).await,
+        Commands::Members => commands::members::members().await,
+        Commands::Remove { user_id } => commands::members::remove(user_id).await,
+        Commands::Role { user_id, role } => commands::members::change_role(user_id, role).await,
+        Commands::Register => commands::account::register().await,
+        Commands::Login => commands::account::login().await,
+        Commands::Logout => commands::account::logout().await,
+        Commands::ResetPassword => commands::account::reset_password().await,
         Commands::Status => commands::status::show().await,
         Commands::Audit => commands::audit::show().await,
     };

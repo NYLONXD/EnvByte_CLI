@@ -1,6 +1,6 @@
-use crate::utils::{
-    config::{http_client, response_error},
-    local_store::{load_config, load_logs},
+use crate::shared::{
+    http::{http_client, response_error},
+    storage::{load_config, load_logs},
 };
 use colored::Colorize;
 
@@ -62,7 +62,8 @@ async fn show_remote_logs(file: Option<String>) -> Result<(), String> {
     let config = load_config()?;
     let project_id = config.project_id.clone().ok_or("No project linked.")?;
     let token =
-        crate::commands::auth::access_token(&config.server_url, config.auth_token.clone()).await?;
+        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
+            .await?;
     let response = http_client()?
         .get(format!(
             "{}/projects/{project_id}/commits",

@@ -59,7 +59,7 @@ pub fn load_config() -> Result<LocalConfig, String> {
     let raw = fs::read_to_string(&path).map_err(|e| format!("Could not read .greenbyte: {}", e))?;
     let config: LocalConfig =
         serde_json::from_str(&raw).map_err(|e| format!("Corrupt .greenbyte file: {}", e))?;
-    crate::utils::config::validate_server_url(&config.server_url)?;
+    crate::shared::http::validate_server_url(&config.server_url)?;
     Ok(config)
 }
 

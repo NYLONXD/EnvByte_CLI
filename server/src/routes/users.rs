@@ -2,7 +2,7 @@ use axum::{extract::State, Json};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{auth::AuthUser, error::ApiError, models::User, state::AppState};
+use crate::{error::ApiError, models::User, security::AuthUser, state::AppState};
 
 #[derive(Serialize)]
 pub struct MeResponse {

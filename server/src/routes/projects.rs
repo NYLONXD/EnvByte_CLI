@@ -9,10 +9,10 @@ use uuid::Uuid;
 use zeroize::Zeroizing;
 
 use crate::{
-    auth::{hash_token, random_token, AuthUser},
     error::ApiError,
     models::Invitation,
     permissions::require_admin,
+    security::{hash_token, random_token, AuthUser},
     state::AppState,
 };
 
@@ -446,7 +446,8 @@ pub async fn rollback(
     Path(project_id): Path<Uuid>,
     Json(request): Json<RollbackRequest>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
-    crate::routes::env::rollback_to_commit(&state, user.id, project_id, request.commit_id).await?;
+    crate::routes::env_files::rollback_to_commit(&state, user.id, project_id, request.commit_id)
+        .await?;
     Ok(Json(
         serde_json::json!({ "ok": true, "commit_id": request.commit_id }),
     ))

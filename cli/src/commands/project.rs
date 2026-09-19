@@ -1,8 +1,9 @@
-use crate::utils::{
-    config::{http_client, response_error, server_url, validate_server_url},
+use crate::shared::{
     crypto::{generate_token, master_key_verifier},
-    local_store::{config_exists, save_config, LocalConfig},
-    mac::get_device_mac,
+    device::get_device_mac,
+    http::{http_client, response_error, server_url, validate_server_url},
+    storage::{config_exists, save_config, LocalConfig},
+    terminal::{prompt, start_spinner},
 };
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,7 @@ pub async fn create(project_name: String) -> Result<(), String> {
         );
     }
 
-    let auth_token = crate::commands::auth::access_token(&server, None).await?;
+    let auth_token = crate::commands::account::access_token(&server, None).await?;
 
     println!(
         "{}",
@@ -127,13 +128,13 @@ pub async fn init(project_name: String) -> Result<(), String> {
 
     // An invitation proves you were invited, not who you are. Joining happens
     // as the signed-in account, so a leaked token cannot become a session.
-    let auth_token = crate::commands::auth::access_token(&server, None).await?;
+    let auth_token = crate::commands::account::access_token(&server, None).await?;
 
     let ott = prompt("Enter your One-Time Token (from email): ")?;
     let mac = get_device_mac();
 
     // Build refresher token = SHA256(ott + mac)
-    let refresher_token = crate::utils::mac::make_refresher_token(&ott, mac.as_deref());
+    let refresher_token = crate::shared::device::make_refresher_token(&ott, mac.as_deref());
 
     let spinner = start_spinner("Verifying token...");
 
@@ -226,28 +227,4 @@ fn validate_project_name(name: &str) -> Result<(), String> {
         );
     }
     Ok(())
-}
-
-fn prompt(label: &str) -> Result<String, String> {
-    use std::io::{self, Write};
-    print!("{}", label);
-    io::stdout().flush().map_err(|e| e.to_string())?;
-    let mut input = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .map_err(|e| e.to_string())?;
-    Ok(input.trim().to_string())
-}
-
-fn start_spinner(msg: &str) -> indicatif::ProgressBar {
-    use indicatif::{ProgressBar, ProgressStyle};
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(
-        ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .unwrap(),
-    );
-    pb.set_message(msg.to_string());
-    pb.enable_steady_tick(std::time::Duration::from_millis(80));
-    pb
 }

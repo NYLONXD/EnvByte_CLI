@@ -1,7 +1,7 @@
-use crate::utils::{
-    config::read_env_file,
+use crate::shared::{
     crypto::{encrypt_env, read_master_key},
-    local_store::{append_commit, load_config, LocalCommit},
+    env_files::read_env_file,
+    storage::{append_commit, load_config, LocalCommit},
 };
 use colored::Colorize;
 use uuid::Uuid;

@@ -100,7 +100,7 @@ cargo run -p greenbyte -- --help
 Or install the `greenbyte` command locally:
 
 ```bash
-cargo install --path . --locked
+cargo install --path cli --locked
 ```
 
 The CLI defaults to `http://localhost:3030`. It can also be set explicitly:
@@ -216,6 +216,38 @@ greenbyte audit
 | API | Rust, Axum | Authentication, authorization, projects, versions, and audits |
 | Database | PostgreSQL 16 | Users, memberships, encrypted versions, sessions, and events |
 | Deployment | Docker Compose | Local API and database orchestration |
+
+### Project layout
+
+```text
+cli/                      The `greenbyte` command-line tool
+  src/main.rs             Command definitions and dispatch
+  src/commands/           One file per group of commands
+    account.rs            register, login, logout, reset-password
+    project.rs            create, init
+    push_pull.rs          push, pull
+    snapshot.rs           commit (local encrypted snapshot)
+    history.rs            logs
+    rollback.rs           rollback
+    members.rs            add, members, remove, role
+    status.rs, audit.rs   status, audit
+  src/shared/             Helpers used by the commands
+    crypto.rs             Encryption and master-key handling
+    http.rs               Server URL, HTTP client, API error messages
+    env_files.rs          Finding, validating and writing .env files
+    storage.rs            Local project config, login session and snapshot log
+    device.rs             Device identity used when joining a project
+    terminal.rs           Prompts and spinners
+server/                   The API (Axum + PostgreSQL)
+  src/main.rs             Startup: config, database, migrations
+  src/lib.rs              Router: every endpoint is listed here
+  src/routes/             HTTP handlers (auth, users, projects, env_files, health)
+  src/security.rs         Password hashing, access/refresh tokens, logged-in user
+  src/permissions.rs      Project role checks
+  src/config.rs           Environment variables
+  migrations/             Database schema
+docs/API_CONTRACT.md      Endpoint reference
+```
 
 The API source is in [`server/src`](server/src), database migrations are in [`server/migrations`](server/migrations), and the endpoint contract is documented in [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
 
