@@ -1,128 +1,96 @@
-use crate::shared::{
-    crypto::{decrypt_env, read_master_key, EncryptedPayload},
-    device::get_device_mac,
-    env_files::write_named_env_file,
-    http::{http_client, response_error},
-    storage::{load_config, load_logs},
-    terminal::{prompt, start_spinner},
-};
+//! `greenbyte rollback` - restore a previous state, on the server or locally.
+
 use colored::Colorize;
 
-/// `greenbyte rollback --address <id>`  → rollback on server to a remote commit
-/// `greenbyte rollback --local <id>`    → restore local .env from a local commit snapshot
+use crate::{
+    commands::context::ProjectContext,
+    core::{
+        api::projects,
+        crypto::{open_payload, EncryptedPayload},
+        device,
+        env_files::write_named_env_file,
+        workspace::commit_log,
+    },
+    ui,
+};
+
 pub async fn rollback(address: Option<String>, local: Option<String>) -> Result<(), String> {
     match (address, local) {
-        (Some(addr), None) => rollback_server(addr).await,
-        (None, Some(local_id)) => rollback_local(local_id).await,
-        (Some(_), Some(_)) => Err("Use either --address OR --local, not both.".to_string()),
+        (Some(commit), None) => remote(commit).await,
+        (None, Some(commit)) => offline(commit).await,
+        (Some(_), Some(_)) => Err("Use either --address or --local, not both.".to_string()),
         (None, None) => Err(
-            "Provide --address <id> for server rollback or --local <id> for local rollback."
+            "Provide --address <id> to roll the server back, or --local <id> to restore from a \
+             local snapshot."
                 .to_string(),
         ),
     }
 }
 
-// ─── Server rollback ──────────────────────────────────────────────────────────
+async fn remote(commit_id: String) -> Result<(), String> {
+    let context = ProjectContext::load().await?;
+    let short = &commit_id[..8.min(commit_id.len())];
 
-async fn rollback_server(address: String) -> Result<(), String> {
-    let config = load_config()?;
-
-    // Clone before ok_or consumes the Option, so config is still usable after
-    let project_id = config.project_id.clone().ok_or("No project linked.")?;
-
-    let auth_token =
-        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
-            .await?;
-
-    let short = &address[..8.min(address.len())];
-    println!(
-        "{}",
-        format!("Rolling back to server commit {}...", short).bold()
-    );
-
-    let confirm = prompt("This will overwrite the current server .env. Continue? [y/N]: ")?;
-    if confirm.to_lowercase() != "y" {
+    if !ui::confirm(&format!(
+        "Roll {} back to commit {short}? This replaces the current server state",
+        context.config.qualified_name()
+    ))? {
         println!("Aborted.");
         return Ok(());
     }
 
-    let spinner = start_spinner("Rolling back on server...");
+    let bar = ui::spinner("Rolling back...");
+    let result = projects::rollback(&context.session, &context.project_id, &commit_id).await;
+    bar.finish_and_clear();
+    result?;
 
-    let client = http_client()?;
-    let res = client
-        .post(format!(
-            "{}/projects/{}/rollback",
-            config.server_url.trim_end_matches('/'),
-            project_id
-        ))
-        .bearer_auth(&auth_token)
-        .json(&serde_json::json!({ "commit_id": address }))
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    spinner.finish_and_clear();
-
-    if !res.status().is_success() {
-        return Err(response_error(res, "Rollback").await);
-    }
-
-    println!(
-        "{} Server rolled back to commit {}",
-        "✓".green().bold(),
-        short.cyan()
-    );
-    println!("  Run `greenbyte pull` to sync your local .env.");
+    ui::success(&format!("Rolled back to commit {}.", short.cyan()));
+    ui::note("Run `greenbyte pull` to sync your local .env.");
     Ok(())
 }
 
-// ─── Local rollback ───────────────────────────────────────────────────────────
-
-async fn rollback_local(local_id: String) -> Result<(), String> {
-    let store = load_logs()?;
-
-    // Match by full ID or by short prefix (first 8 chars)
+async fn offline(prefix: String) -> Result<(), String> {
+    let store = commit_log::load()?;
     let commit = store
         .commits
         .iter()
-        .find(|c| c.id == local_id || c.id.starts_with(&local_id))
-        .ok_or_else(|| format!("No local commit found with ID starting with '{}'", local_id))?;
+        .find(|commit| commit.id == prefix || commit.id.starts_with(&prefix))
+        .ok_or_else(|| format!("No local snapshot with an ID starting '{prefix}'."))?;
 
-    println!(
-        "{}",
-        format!("Restoring local .env from commit '{}'", &commit.id[..8]).bold()
+    ui::heading("Restore local snapshot");
+    ui::field("ID", &commit.id[..8]);
+    ui::field("Message", &commit.message);
+    ui::field(
+        "Taken",
+        &commit.timestamp.format("%Y-%m-%d %H:%M UTC").to_string(),
     );
-    println!("  Message:   \"{}\"", commit.message);
-    println!(
-        "  Timestamp: {}",
-        commit.timestamp.format("%Y-%m-%d %H:%M UTC")
-    );
-    println!();
 
-    let confirm = prompt("This will overwrite your local .env. Continue? [y/N]: ")?;
-    if confirm.to_lowercase() != "y" {
+    let filename = commit
+        .filename
+        .clone()
+        .unwrap_or_else(|| ".env".to_string());
+    if !ui::confirm(&format!("This overwrites your local {filename}. Continue?"))? {
         println!("Aborted.");
         return Ok(());
     }
 
-    let mac = get_device_mac();
-    let master_key = read_master_key()?;
+    // Decrypting needs the project key, which means a live session - a local
+    // snapshot is ciphertext, not a plaintext backup.
+    let context = ProjectContext::load().await?;
+    let keyring = context.keyring().await?;
+    let plaintext = open_payload(
+        &keyring,
+        &EncryptedPayload {
+            data: commit.env_snapshot.clone(),
+        },
+        device::get_device_mac().as_deref(),
+    )?;
+    write_named_env_file(&filename, &plaintext)?;
 
-    let payload = EncryptedPayload {
-        data: commit.env_snapshot.clone(),
-    };
-    let decrypted = decrypt_env(&payload, &master_key, mac.as_deref())?;
-
-    let filename = commit.filename.as_deref().unwrap_or(".env");
-    write_named_env_file(filename, &decrypted)?;
-
-    println!(
-        "{} {} restored from local commit {}",
-        "✓".green().bold(),
+    ui::success(&format!(
+        "{} restored from snapshot {}.",
         filename.cyan(),
         commit.id[..8].cyan()
-    );
+    ));
     Ok(())
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────

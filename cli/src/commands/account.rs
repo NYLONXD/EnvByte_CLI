@@ -1,304 +1,177 @@
-use crate::shared::{
-    http::{http_client, response_error, server_url, validate_server_url},
-    storage::{clear_global_auth, load_config, load_global_auth, save_global_auth, GlobalAuth},
-    terminal::{prompt, prompt_password, start_spinner},
-};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+//! `greenbyte register`, `login`, `logout` and `reset-password`.
+
 use colored::Colorize;
-use serde::{Deserialize, Serialize};
 use zeroize::Zeroizing;
 
-#[derive(Serialize)]
-struct RegisterRequest<'a> {
-    username: &'a str,
-    email: &'a str,
-    password: &'a str,
-}
+use crate::{
+    commands::context::{access_token, ensure_identity_published},
+    core::{
+        api::{
+            accounts::{self, LoginRequest, SignupRequest},
+            client::server_url,
+            Session,
+        },
+        workspace::{global_auth, project_config},
+    },
+    ui,
+};
 
-#[derive(Serialize)]
-struct LoginRequest<'a> {
-    email: &'a str,
-    password: &'a str,
-}
-
-#[derive(Deserialize)]
-struct AuthResponse {
-    token: String,
-    #[serde(default)]
-    refresh_token: Option<String>,
-    user_id: String,
-    #[allow(dead_code)]
-    username: String,
-    #[allow(dead_code)]
-    email: String,
-}
-
-/// `greenbyte register` — create a new account
 pub async fn register() -> Result<(), String> {
-    println!("{}", "Creating your Greenbyte account".bold());
+    println!("{}", "Create your Greenbyte account".bold());
     println!();
 
-    let email = prompt("Email: ")?;
-    let user_id = prompt("Username (no spaces): ")?;
-    let password = Zeroizing::new(prompt_password("Password: ")?);
-    let password_confirm = Zeroizing::new(prompt_password("Confirm password: ")?);
+    let email = ui::prompt("Email: ")?;
+    let username = ui::prompt("Username (no spaces): ")?;
+    let password = Zeroizing::new(ui::prompt_password("Password: ")?);
+    let confirmation = Zeroizing::new(ui::prompt_password("Confirm password: ")?);
 
     validate_email(&email)?;
-    if user_id.is_empty() || user_id.chars().any(char::is_whitespace) {
-        return Err("Username must be non-empty and contain no spaces.".to_string());
-    }
-    if password.len() < 12 {
-        return Err("Password must contain at least 12 characters.".to_string());
-    }
-
-    if password != password_confirm {
+    validate_username(&username)?;
+    validate_password(&password)?;
+    if password != confirmation {
         return Err("Passwords do not match.".to_string());
     }
 
-    let spinner = start_spinner("Registering...");
-
     let server = server_url();
-    validate_server_url(&server)?;
-    let client = http_client()?;
-    let res = client
-        .post(format!("{server}/auth/signup"))
-        .json(&RegisterRequest {
-            username: &user_id,
+    let bar = ui::spinner("Registering...");
+    let signup = accounts::signup(
+        &server,
+        SignupRequest {
+            username: &username,
             email: &email,
             password: &password,
-        })
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        },
+    )
+    .await;
+    bar.finish_and_clear();
+    let signup = signup?;
 
-    spinner.finish_and_clear();
-
-    if !res.status().is_success() {
-        return Err(response_error(res, "Registration").await);
-    }
-
-    let signup: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| format!("Response parse error: {}", e))?;
-    let data: AuthResponse = if signup["verification_required"].as_bool() == Some(true) {
-        println!(
-            "{} A verification token was sent to {}.",
-            "●".green(),
-            email.cyan()
+    if !signup.verification_required {
+        return Err(
+            "The server did not ask for email verification, which this CLI requires.".to_string(),
         );
-        let verification = Zeroizing::new(prompt("Verification token: ")?);
-        let spinner = start_spinner("Verifying email...");
-        let response = client
-            .post(format!("{server}/auth/verify-email"))
-            .json(&serde_json::json!({ "email": email, "token": &*verification }))
-            .send()
-            .await
-            .map_err(|e| format!("Network error: {e}"))?;
-        spinner.finish_and_clear();
-        if !response.status().is_success() {
-            return Err(response_error(response, "Email verification").await);
-        }
-        response
-            .json()
-            .await
-            .map_err(|e| format!("Verification response parse error: {e}"))?
-    } else {
-        serde_json::from_value(signup)
-            .map_err(|e| format!("Registration response parse error: {e}"))?
-    };
-
-    save_global_auth(&GlobalAuth {
-        email: Some(email.clone()),
-        auth_token: Some(data.token),
-        user_id: Some(data.user_id),
-        refresh_token: data.refresh_token,
-    })?;
-
-    println!(
-        "{} Account created for {}",
-        "✓".green().bold(),
+    }
+    ui::step(&format!(
+        "A verification token was sent to {}",
         email.cyan()
-    );
-    println!("  You're now logged in.");
+    ));
+    let token = Zeroizing::new(ui::prompt("Verification token: ")?);
+
+    let bar = ui::spinner("Verifying...");
+    let auth = accounts::verify_email(&server, &email, &token).await;
+    bar.finish_and_clear();
+    let auth = auth?;
+
+    store_session(&email, &auth)?;
+    let session = Session::new(&server, auth.token)?;
+    let identity = ensure_identity_published(&session).await?;
+
+    ui::success(&format!("Account created for {}.", email.cyan()));
+    ui::field("Identity", &identity.fingerprint());
+    ui::note("You are signed in. Colleagues can now seal project keys to you.");
     Ok(())
 }
 
-/// `greenbyte login` — login to existing account
 pub async fn login() -> Result<(), String> {
-    println!("{}", "Login to Greenbyte".bold());
+    println!("{}", "Sign in to Greenbyte".bold());
     println!();
 
-    let email = prompt("Email: ")?;
-    let password = Zeroizing::new(prompt_password("Password: ")?);
+    let email = ui::prompt("Email: ")?;
+    let password = Zeroizing::new(ui::prompt_password("Password: ")?);
     validate_email(&email)?;
 
-    let spinner = start_spinner("Authenticating...");
-
     let server = server_url();
-    validate_server_url(&server)?;
-    let client = http_client()?;
-    let res = client
-        .post(format!("{server}/auth/login"))
-        .json(&LoginRequest {
+    let bar = ui::spinner("Authenticating...");
+    let auth = accounts::login(
+        &server,
+        LoginRequest {
             email: &email,
             password: &password,
-        })
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
+        },
+    )
+    .await;
+    bar.finish_and_clear();
+    let auth = auth?;
 
-    spinner.finish_and_clear();
+    store_session(&email, &auth)?;
+    let session = Session::new(&server, auth.token)?;
+    // Publishing on every sign-in means a new machine becomes invitable at
+    // once, instead of failing later with a confusing "no identity key".
+    let identity = ensure_identity_published(&session).await?;
 
-    let status = res.status();
-
-    if !status.is_success() {
-        return Err(response_error(res, "Login").await);
-    }
-
-    let data: AuthResponse = res
-        .json()
-        .await
-        .map_err(|e| format!("Response parse error: {}", e))?;
-
-    save_global_auth(&GlobalAuth {
-        email: Some(email.clone()),
-        auth_token: Some(data.token),
-        user_id: Some(data.user_id),
-        refresh_token: data.refresh_token,
-    })?;
-
-    println!("{} Logged in as {}", "✓".green().bold(), email.cyan());
-
+    ui::success(&format!("Signed in as {}.", email.cyan()));
+    ui::field("Identity", &identity.fingerprint());
     Ok(())
 }
 
-/// `greenbyte logout` — remove the local login token.
 pub async fn logout() -> Result<(), String> {
-    let auth = load_global_auth()?;
+    let auth = global_auth::load()?;
     if let Some(refresh_token) = auth.refresh_token {
-        let server = load_config()
-            .ok()
+        let server = project_config::load()
             .map(|config| config.server_url)
-            .unwrap_or_else(server_url);
-        if let Ok(client) = http_client() {
-            if let Err(error) = client
-                .post(format!("{}/auth/logout", server.trim_end_matches('/')))
-                .json(&serde_json::json!({ "refresh_token": refresh_token }))
-                .send()
-                .await
-            {
-                eprintln!(
-                    "{} Could not revoke the remote session: {error}",
-                    "⚠".yellow()
-                );
-            }
+            .unwrap_or_else(|_| server_url());
+        if let Err(error) = accounts::logout(&server, &refresh_token).await {
+            ui::warn(&format!("Could not revoke the remote session: {error}"));
         }
     }
-    clear_global_auth()?;
-    println!(
-        "{} Logged out. Project files and encrypted snapshots were kept.",
-        "✓".green().bold()
-    );
+    global_auth::clear()?;
+    ui::success("Signed out.");
+    ui::note("Your identity key and encrypted snapshots were kept.");
     Ok(())
 }
 
 pub async fn reset_password() -> Result<(), String> {
-    let email = prompt("Email: ")?;
+    let email = ui::prompt("Email: ")?;
     validate_email(&email)?;
     let server = server_url();
-    validate_server_url(&server)?;
-    let client = http_client()?;
-    let response = client
-        .post(format!("{server}/auth/forgot-password"))
-        .json(&serde_json::json!({ "email": email }))
-        .send()
-        .await
-        .map_err(|e| format!("Could not request password reset: {e}"))?;
-    if !response.status().is_success() {
-        return Err(response_error(response, "Password reset request").await);
-    }
-    println!("If the account exists, a reset token has been sent.");
-    let token = Zeroizing::new(prompt("Reset token: ")?);
-    let password = Zeroizing::new(prompt_password("New password: ")?);
-    let confirmation = Zeroizing::new(prompt_password("Confirm new password: ")?);
-    if password.len() < 12 {
-        return Err("Password must contain at least 12 characters.".to_string());
-    }
+
+    accounts::forgot_password(&server, &email).await?;
+    println!("If that account exists, a reset token has been sent.");
+
+    let token = Zeroizing::new(ui::prompt("Reset token: ")?);
+    let password = Zeroizing::new(ui::prompt_password("New password: ")?);
+    let confirmation = Zeroizing::new(ui::prompt_password("Confirm new password: ")?);
+    validate_password(&password)?;
     if password != confirmation {
         return Err("Passwords do not match.".to_string());
     }
-    let response = client
-        .post(format!("{server}/auth/reset-password"))
-        .json(&serde_json::json!({
-            "email": email,
-            "token": &*token,
-            "password": &*password,
-        }))
-        .send()
-        .await
-        .map_err(|e| format!("Could not reset password: {e}"))?;
-    if !response.status().is_success() {
-        return Err(response_error(response, "Password reset").await);
-    }
-    clear_global_auth()?;
-    println!(
-        "{} Password changed. Run `greenbyte login`.",
-        "✓".green().bold()
-    );
+
+    accounts::reset_password(&server, &email, &token, &password).await?;
+    global_auth::clear()?;
+
+    ui::success("Password changed.");
+    ui::note("Run `greenbyte login`. Your identity key and project access are unaffected.");
     Ok(())
 }
 
-pub async fn access_token(server: &str, fallback: Option<String>) -> Result<String, String> {
-    let mut auth = load_global_auth()?;
-    if let Some(token) = auth.auth_token.as_ref() {
-        if !token_expires_soon(token) {
-            return Ok(token.clone());
-        }
+/// Shows who the local session belongs to, without contacting the server.
+pub async fn whoami() -> Result<(), String> {
+    let server = project_config::load()
+        .map(|config| config.server_url)
+        .unwrap_or_else(|_| server_url());
+    let token = access_token(&server, None).await?;
+    let session = Session::new(&server, token)?;
+    let profile = accounts::me(&session).await?;
+    ui::field("Username", &profile.username);
+    ui::field("Email", &profile.email);
+    match profile.public_key.as_deref() {
+        Some(key) => ui::field(
+            "Identity",
+            &crate::core::crypto::identity::fingerprint_of(key)?,
+        ),
+        None => ui::warn("No identity key published. Run `greenbyte login` to publish one."),
     }
-    if let Some(refresh_token) = auth.refresh_token.clone() {
-        let client = http_client()?;
-        let response = client
-            .post(format!("{}/auth/refresh", server.trim_end_matches('/')))
-            .json(&serde_json::json!({ "refresh_token": refresh_token }))
-            .send()
-            .await
-            .map_err(|e| format!("Could not refresh login session: {e}"))?;
-        if !response.status().is_success() {
-            return Err(response_error(response, "Session refresh").await);
-        }
-        let refreshed: AuthResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Invalid session refresh response: {e}"))?;
-        auth.auth_token = Some(refreshed.token.clone());
-        auth.refresh_token = refreshed.refresh_token;
-        auth.email = Some(refreshed.email);
-        auth.user_id = Some(refreshed.user_id);
-        save_global_auth(&auth)?;
-        return Ok(refreshed.token);
-    }
-    auth.auth_token
-        .or(fallback)
-        .ok_or_else(|| "Not logged in. Run `greenbyte login` first.".to_string())
+    Ok(())
 }
 
-fn token_expires_soon(token: &str) -> bool {
-    let Some(payload) = token.split('.').nth(1) else {
-        return true;
-    };
-    let Ok(decoded) = URL_SAFE_NO_PAD.decode(payload) else {
-        return true;
-    };
-    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&decoded) else {
-        return true;
-    };
-    value["exp"]
-        .as_i64()
-        .is_none_or(|expires| expires <= chrono::Utc::now().timestamp() + 120)
+fn store_session(email: &str, auth: &accounts::AuthResponse) -> Result<(), String> {
+    let mut stored = global_auth::load().unwrap_or_default();
+    stored.email = Some(email.to_string());
+    stored.auth_token = Some(auth.token.clone());
+    stored.user_id = Some(auth.user_id.clone());
+    stored.refresh_token = auth.refresh_token.clone();
+    global_auth::save(&stored)
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn validate_email(email: &str) -> Result<(), String> {
     let (local, domain) = email
@@ -312,4 +185,41 @@ fn validate_email(email: &str) -> Result<(), String> {
         return Err("Enter a valid email address.".to_string());
     }
     Ok(())
+}
+
+fn validate_username(username: &str) -> Result<(), String> {
+    if username.len() < 2
+        || username.len() > 64
+        || !username
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+    {
+        return Err(
+            "Username must be 2-64 characters using letters, numbers, '-' or '_'.".to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_password(password: &str) -> Result<(), String> {
+    if password.len() < 12 {
+        return Err("Password must contain at least 12 characters.".to_string());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validates_account_input() {
+        assert!(validate_email("dev@example.com").is_ok());
+        assert!(validate_email("nope").is_err());
+        assert!(validate_username("dev_2").is_ok());
+        assert!(validate_username("has space").is_err());
+        assert!(validate_username("a").is_err());
+        assert!(validate_password("twelve-chars").is_ok());
+        assert!(validate_password("short").is_err());
+    }
 }

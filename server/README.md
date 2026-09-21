@@ -1,6 +1,8 @@
 # Greenbyte API server
 
-The server is a zero-knowledge coordination service for the Greenbyte CLI. It stores ciphertext, project membership, authentication state, immutable versions, and audit metadata. It never receives project master keys or decrypted environment content.
+The server is a zero-knowledge coordination service for the Greenbyte CLI. It stores ciphertext, per-member sealed project keys it cannot open, project membership, authentication state, immutable versions, and audit metadata. It never receives an openable key or decrypted environment content.
+
+See [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) for the module layout and how to add a feature.
 
 ## Local development
 

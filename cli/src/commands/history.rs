@@ -1,107 +1,79 @@
-use crate::shared::{
-    http::{http_client, response_error},
-    storage::{load_config, load_logs},
-};
+//! `greenbyte logs` - local snapshots, or the project's server-side history.
+
 use colored::Colorize;
 
-/// `greenbyte logs [--file <filename>]`
-/// Shows local commit history. Optionally writes to a file.
-pub async fn show_logs(file: Option<String>, remote: bool) -> Result<(), String> {
-    if remote {
-        return show_remote_logs(file).await;
-    }
-    let store = load_logs()?;
+use crate::{
+    commands::context::ProjectContext,
+    core::{api::env, workspace::commit_log},
+    ui,
+};
 
-    if store.commits.is_empty() {
-        println!(
-            "{}",
-            "No commits yet. Use `greenbyte commit` or `greenbyte push`.".dimmed()
-        );
+pub async fn show(output_file: Option<String>, remote: bool) -> Result<(), String> {
+    if remote {
+        return show_remote().await;
+    }
+    show_local(output_file)
+}
+
+async fn show_remote() -> Result<(), String> {
+    let context = ProjectContext::load().await?;
+    let commits = env::history(&context.session, &context.project_id).await?;
+    if commits.is_empty() {
+        ui::note("No server-side history yet.");
         return Ok(());
     }
-
-    let total = store.commits.len();
-    let mut output = String::new();
-    output.push_str("─── Greenbyte Logs ──────────────────────────────────\n");
-
-    for (i, commit) in store.commits.iter().enumerate().rev() {
-        let tag = if i == total - 1 { "latest" } else { "      " };
-        let line = format!(
-            "[{}] {} | {} | {} | \"{}\"{}\n",
-            &commit.id[..8],
-            commit.timestamp.format("%Y-%m-%d %H:%M UTC"),
-            tag,
-            commit.filename.as_deref().unwrap_or(".env"),
-            commit.message,
+    ui::heading(&format!("History for {}", context.config.qualified_name()));
+    for commit in commits {
+        println!(
+            "  {} {:<20} {:<14} {:<8} {}",
+            commit.commit_id[..8].cyan(),
             commit
-                .remote_commit_id
-                .as_ref()
-                .map(|id| format!(" | remote: {}", &id[..8.min(id.len())]))
-                .unwrap_or_default(),
+                .created_at
+                .format("%Y-%m-%d %H:%M UTC")
+                .to_string()
+                .dimmed(),
+            commit.author,
+            format!("v{}", commit.key_version).dimmed(),
+            commit.message
         );
-        output.push_str(&line);
+        ui::note(&format!("    {}", commit.filename));
     }
-
-    output.push_str("─────────────────────────────────────────────────────\n");
-
-    match file {
-        Some(filename) => {
-            std::fs::write(&filename, &output)
-                .map_err(|e| format!("Could not write log file: {}", e))?;
-            println!("{} Logs saved to {}", "✓".green().bold(), filename.cyan());
-        }
-        None => {
-            print!("{}", output);
-        }
-    }
-
     Ok(())
 }
 
-async fn show_remote_logs(file: Option<String>) -> Result<(), String> {
-    let config = load_config()?;
-    let project_id = config.project_id.clone().ok_or("No project linked.")?;
-    let token =
-        crate::commands::account::access_token(&config.server_url, config.auth_token.clone())
-            .await?;
-    let response = http_client()?
-        .get(format!(
-            "{}/projects/{project_id}/commits",
-            config.server_url.trim_end_matches('/')
-        ))
-        .bearer_auth(token)
-        .send()
-        .await
-        .map_err(|e| format!("Could not load remote history: {e}"))?;
-    if !response.status().is_success() {
-        return Err(response_error(response, "Remote history").await);
+fn show_local(output_file: Option<String>) -> Result<(), String> {
+    let store = commit_log::load()?;
+    if store.commits.is_empty() {
+        ui::note("No local snapshots yet. Run `greenbyte commit \"message\"`.");
+        return Ok(());
     }
-    let commits: Vec<serde_json::Value> = response
-        .json()
-        .await
-        .map_err(|e| format!("Invalid remote history response: {e}"))?;
-    let mut output = String::from("─── Greenbyte Remote Logs ───────────────────────────\n");
-    for commit in commits {
-        let id = commit["commit_id"].as_str().unwrap_or("unknown");
-        output.push_str(&format!(
-            "[{}] {} | {} | {} | \"{}\"\n",
-            &id[..8.min(id.len())],
-            commit["created_at"].as_str().unwrap_or("unknown time"),
-            commit["author"].as_str().unwrap_or("unknown author"),
-            commit["filename"].as_str().unwrap_or(".env"),
-            commit["message"].as_str().unwrap_or_default(),
+    let mut rendered = String::new();
+    for commit in &store.commits {
+        rendered.push_str(&format!(
+            "{}  {}  {}  {}\n",
+            &commit.id[..8],
+            commit.timestamp.format("%Y-%m-%d %H:%M UTC"),
+            commit.filename.as_deref().unwrap_or(".env"),
+            commit.message
         ));
     }
-    output.push_str("─────────────────────────────────────────────────────\n");
-    write_or_print(file, &output)
-}
-
-fn write_or_print(file: Option<String>, output: &str) -> Result<(), String> {
-    if let Some(filename) = file {
-        std::fs::write(&filename, output).map_err(|e| format!("Could not write log file: {e}"))?;
-        println!("{} Logs saved to {}", "✓".green().bold(), filename.cyan());
-    } else {
-        print!("{output}");
+    match output_file {
+        // Snapshots are ciphertext, but the log still names files and times,
+        // so it is written with the same care as the rest.
+        Some(path) => {
+            crate::core::workspace::paths::secure_atomic_write(
+                std::path::Path::new(&path),
+                rendered.as_bytes(),
+            )?;
+            ui::success(&format!(
+                "Wrote {} local snapshots to {path}.",
+                store.commits.len()
+            ));
+        }
+        None => {
+            ui::heading("Local snapshots");
+            print!("{rendered}");
+        }
     }
     Ok(())
 }

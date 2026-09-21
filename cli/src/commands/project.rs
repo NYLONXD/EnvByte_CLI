@@ -1,192 +1,131 @@
-use crate::shared::{
-    crypto::{generate_token, master_key_verifier},
-    device::get_device_mac,
-    http::{http_client, response_error, server_url, validate_server_url},
-    storage::{config_exists, save_config, LocalConfig},
-    terminal::{prompt, start_spinner},
-};
+//! `greenbyte create` and `greenbyte init`.
+
 use colored::Colorize;
-use serde::{Deserialize, Serialize};
-use zeroize::Zeroizing;
 
-#[derive(Serialize)]
-struct CreateProjectRequest {
-    name: String,
-    master_key_hash: String, // we send a hash of master key, never the key itself
-}
+use crate::{
+    commands::context::{account_session, ensure_identity_published},
+    core::{
+        api::{client::server_url, projects},
+        crypto::{generate_data_key, sealing},
+        device,
+        workspace::project_config::{self, ProjectConfig},
+    },
+    ui,
+};
 
-#[derive(Deserialize)]
-struct CreateProjectResponse {
-    project_id: String,
-    soft_token: String,
-}
-
-/// `greenbyte create <project_name>`
-/// Creates a new project on the server and sets up local .greenbyte config.
+/// `greenbyte create <name>` - starts a new project in this directory.
+///
+/// The project data key is minted here and sealed to the creator's own
+/// identity. Nothing is printed for the user to write down, because nothing
+/// needs to be: colleagues get their own sealed copy when they are invited.
 pub async fn create(project_name: String) -> Result<(), String> {
     validate_project_name(&project_name)?;
-    let server = server_url();
-    validate_server_url(&server)?;
-    if config_exists() {
+    if project_config::exists() {
         return Err(
-            "A .greenbyte config already exists here. Use `greenbyte init` to link.".to_string(),
+            "A .greenbyte file already exists here. Use `greenbyte init` to link an existing \
+             project."
+                .to_string(),
         );
     }
 
-    let auth_token = crate::commands::account::access_token(&server, None).await?;
+    let session = account_session().await?;
+    let identity = ensure_identity_published(&session).await?;
 
-    println!(
-        "{}",
-        format!("Creating project '{}'...", project_name).bold()
-    );
+    let data_key = generate_data_key();
+    let wrapped = sealing::seal(&data_key, &identity.public_key_base64())?;
 
-    // Generate master key for this project — user must save this securely
-    let master_key = Zeroizing::new(generate_token(32));
+    let bar = ui::spinner(&format!("Creating project '{project_name}'..."));
+    let created = projects::create(&session, &project_name, &wrapped).await;
+    bar.finish_and_clear();
+    let created = created?;
 
-    println!();
-    println!(
-        "{}",
-        "⚠  Your Master Key (save this — it cannot be recovered):"
-            .yellow()
-            .bold()
-    );
-    println!("   {}", master_key.cyan().bold());
-    println!();
-    println!("   This key encrypts the project's .env files on your device.");
-    println!("   Every collaborator needs this key through a separate secure channel.");
-    println!("   Store it in a password manager.\n");
-
-    // Send only a verifier for the key, never the key itself.
-    let master_key_hash = master_key_verifier(&master_key);
-
-    let spinner = start_spinner("Creating project on server...");
-
-    let client = http_client()?;
-    let res = client
-        .post(format!("{server}/projects"))
-        .bearer_auth(&auth_token)
-        .json(&CreateProjectRequest {
-            name: project_name.clone(),
-            master_key_hash,
-        })
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    spinner.finish_and_clear();
-
-    if !res.status().is_success() {
-        return Err(response_error(res, "Project creation").await);
-    }
-
-    let data: CreateProjectResponse = res
-        .json()
-        .await
-        .map_err(|e| format!("Response parse error: {}", e))?;
-
-    // Save local config
-    save_config(&LocalConfig {
+    project_config::save(&ProjectConfig {
         project_name: Some(project_name.clone()),
-        project_id: Some(data.project_id),
-        server_url: server,
-        auth_token: Some(auth_token),
+        owner_username: None,
+        project_id: Some(created.project_id),
+        server_url: session.server.clone(),
+        auth_token: None,
         refresh_token: None,
-        soft_token: Some(data.soft_token),
+        soft_token: Some(created.soft_token),
         refresher_token: None,
-        master_key_hint: Some(format!("{}...", &master_key[..8])), // just a hint, not the key
+        key_version: Some(created.key_version),
     })?;
 
-    println!(
-        "{} Project '{}' created!",
-        "✓".green().bold(),
-        project_name.cyan()
-    );
-    println!("  .greenbyte config saved in this directory.");
-    println!("  Add .greenbyte to your .gitignore!\n");
-
-    // Auto-add to .gitignore if it exists
-    append_to_gitignore()?;
-
+    ui::success(&format!("Project '{}' created.", project_name.cyan()));
+    ui::note(&format!(
+        "The project key is sealed to your identity ({}). There is nothing to copy down.",
+        identity.fingerprint()
+    ));
+    ui::note("Add a collaborator with `greenbyte add <email>` - they get their own sealed copy.");
+    add_to_gitignore()?;
     Ok(())
 }
 
-/// `greenbyte init <project_name>`
-/// Links an existing project to the current directory using OTT flow.
-pub async fn init(project_name: String) -> Result<(), String> {
-    validate_project_name(&project_name)?;
-    let server = server_url();
-    validate_server_url(&server)?;
-    if config_exists() {
-        return Err("Already initialized. .greenbyte exists.".to_string());
+/// `greenbyte init` - joins a project you were invited to.
+///
+/// The invitation identifies the project, so no name is needed and none can be
+/// guessed. The project key arrives already sealed to this account.
+pub async fn init(expected_name: Option<String>) -> Result<(), String> {
+    if let Some(name) = &expected_name {
+        validate_project_name(name)?;
+    }
+    if project_config::exists() {
+        return Err("Already initialized. A .greenbyte file exists here.".to_string());
     }
 
-    println!(
-        "{}",
-        format!("Linking to project '{}'...", project_name).bold()
-    );
-    println!();
+    // Joining happens as the signed-in account: an invitation proves you were
+    // invited, not who you are, so a leaked token cannot become a session.
+    let session = account_session().await?;
+    let identity = ensure_identity_published(&session).await?;
 
-    // An invitation proves you were invited, not who you are. Joining happens
-    // as the signed-in account, so a leaked token cannot become a session.
-    let auth_token = crate::commands::account::access_token(&server, None).await?;
+    let ott = ui::prompt("Enter your one-time token (from the invitation email): ")?;
+    if ott.trim().is_empty() {
+        return Err("A one-time token is required to join a project.".to_string());
+    }
+    let mac = device::get_device_mac();
+    let refresher_token = device::make_refresher_token(&ott, mac.as_deref());
 
-    let ott = prompt("Enter your One-Time Token (from email): ")?;
-    let mac = get_device_mac();
+    let bar = ui::spinner("Redeeming invitation...");
+    let joined = projects::join(&session, &ott, &refresher_token, mac.as_deref()).await;
+    bar.finish_and_clear();
+    let joined = joined?;
 
-    // Build refresher token = SHA256(ott + mac)
-    let refresher_token = crate::shared::device::make_refresher_token(&ott, mac.as_deref());
-
-    let spinner = start_spinner("Verifying token...");
-
-    let client = http_client()?;
-    let res = client
-        .post(format!("{server}/projects/{project_name}/join"))
-        .bearer_auth(&auth_token)
-        .json(&serde_json::json!({
-            "ott": ott,
-            "refresher_token": refresher_token,
-            "mac_address": mac,
-        }))
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    spinner.finish_and_clear();
-
-    if !res.status().is_success() {
-        return Err(response_error(res, "Project join").await);
+    if let Some(expected) = &expected_name {
+        if !expected.eq_ignore_ascii_case(&joined.project_name) {
+            ui::warn(&format!(
+                "This invitation is for '{}/{}', not '{expected}'.",
+                joined.owner_username, joined.project_name
+            ));
+        }
     }
 
-    let data: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| format!("Response error: {}", e))?;
-
-    save_config(&LocalConfig {
-        project_name: Some(project_name.clone()),
-        project_id: data["project_id"].as_str().map(String::from),
-        server_url: server,
-        auth_token: Some(auth_token),
+    project_config::save(&ProjectConfig {
+        project_name: Some(joined.project_name.clone()),
+        owner_username: Some(joined.owner_username.clone()),
+        project_id: Some(joined.project_id),
+        server_url: session.server.clone(),
+        auth_token: None,
         refresh_token: None,
-        soft_token: data["soft_token"].as_str().map(String::from),
+        soft_token: Some(joined.soft_token),
         refresher_token: Some(refresher_token),
-        master_key_hint: None,
+        key_version: Some(joined.key_version),
     })?;
 
-    println!(
-        "{} Joined project '{}'!",
-        "✓".green().bold(),
-        project_name.cyan()
-    );
-    println!("  Ask the project owner for the master key over a secure channel,");
-    println!("  then run `greenbyte pull` to get the latest .env.\n");
-    append_to_gitignore()?;
+    ui::success(&format!(
+        "Joined {}.",
+        format!("{}/{}", joined.owner_username, joined.project_name).cyan()
+    ));
+    ui::note(&format!(
+        "The project key was sealed to your identity ({}).",
+        identity.fingerprint()
+    ));
+    ui::note("Run `greenbyte pull` to get the current .env.");
+    add_to_gitignore()?;
     Ok(())
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-fn append_to_gitignore() -> Result<(), String> {
+/// Keeps Greenbyte's own files, and every `.env`, out of version control.
+fn add_to_gitignore() -> Result<(), String> {
     let gitignore = std::path::Path::new(".gitignore");
     let mut existing = std::fs::read_to_string(gitignore).unwrap_or_default();
     let required = [
@@ -210,12 +149,12 @@ fn append_to_gitignore() -> Result<(), String> {
     if changed {
         std::fs::write(gitignore, existing)
             .map_err(|e| format!("Could not update .gitignore: {e}"))?;
-        println!("{} Added Greenbyte secret files to .gitignore", "✓".green());
+        ui::step("Added Greenbyte's files to .gitignore");
     }
     Ok(())
 }
 
-fn validate_project_name(name: &str) -> Result<(), String> {
+pub fn validate_project_name(name: &str) -> Result<(), String> {
     if name.is_empty()
         || name.len() > 64
         || !name
@@ -227,4 +166,57 @@ fn validate_project_name(name: &str) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// `greenbyte projects` - every project this account can reach.
+///
+/// Names are shown as `owner/project`, because two accounts may each own one
+/// called `backend`.
+pub async fn list() -> Result<(), String> {
+    let session = match crate::core::workspace::project_config::load() {
+        Ok(config) => {
+            let token =
+                crate::commands::context::access_token(&config.server_url, config.auth_token)
+                    .await?;
+            crate::core::api::Session::new(&config.server_url, token)?
+        }
+        Err(_) => {
+            let token = crate::commands::context::access_token(&server_url(), None).await?;
+            crate::core::api::Session::new(&server_url(), token)?
+        }
+    };
+    let projects = projects::list(&session).await?;
+    if projects.is_empty() {
+        ui::note("No projects yet. Run `greenbyte create <name>`.");
+        return Ok(());
+    }
+    ui::heading("Projects");
+    for project in projects {
+        println!(
+            "  {:<32} {:<8} key v{}",
+            format!("{}/{}", project.owner_username, project.name).cyan(),
+            project.role,
+            project.key_version
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_reasonable_project_names() {
+        for name in ["api", "api-production", "api_2", "A1"] {
+            assert!(validate_project_name(name).is_ok(), "rejected {name}");
+        }
+    }
+
+    #[test]
+    fn rejects_unusable_project_names() {
+        for name in ["", "has space", "slash/name", "dot.name", &"a".repeat(65)] {
+            assert!(validate_project_name(name).is_err(), "accepted {name}");
+        }
+    }
 }

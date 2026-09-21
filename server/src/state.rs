@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use sqlx::PgPool;
 
-use crate::{config::Config, email::EmailSender, rate_limit::RateLimiter};
+use crate::{
+    config::Config,
+    infra::{email::EmailSender, rate_limit::RateLimiter},
+};
 
 #[derive(Clone)]
 pub struct AppState {

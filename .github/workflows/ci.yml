@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -36,3 +39,26 @@ jobs:
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --locked
       - run: cargo build --workspace --release --locked
+
+  # A secrets manager has no business shipping a dependency with a known
+  # advisory, so this gates merges rather than merely reporting.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+      - run: cargo deny check advisories bans licenses sources
+
+  # Proves the minimum supported Rust version in Cargo.toml is still accurate.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --workspace --locked

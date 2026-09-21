@@ -1,6 +1,6 @@
 # Greenbyte
 
-Greenbyte is a client-side encrypted `.env` manager for teams. It gives environment files project-scoped synchronization, version history, rollback, invitations, roles, and an audit trail without sending plaintext secrets or project master keys to the backend.
+Greenbyte is an end-to-end encrypted `.env` manager for teams. It gives environment files versioned history, rollback, invitations, roles and an audit trail, without any secret ever reaching the server and without anyone having to send a key to anyone.
 
 This repository contains the complete application:
 
@@ -11,29 +11,38 @@ This repository contains the complete application:
 ## How it works
 
 ```text
-.env file ──> Greenbyte CLI ──> AES-256-GCM ciphertext ──> API ──> PostgreSQL
-                  │
-                  └── project master key stays on the client
+.env  ──>  CLI  ──>  AES-256-GCM  ──>  API  ──>  PostgreSQL
+            │
+            └── project key, sealed to each member's identity key
 ```
 
-The CLI derives an encryption key from the project master key with Argon2id, then encrypts each payload with AES-256-GCM using a fresh random salt and nonce. The server stores only opaque encrypted payloads plus the metadata needed for accounts, projects, permissions, versions, and audits.
+Every member has an **identity key** (X25519) that never leaves their device.
+Every project has a **data key** that encrypts its `.env` files. The data key is
+sealed once per member, to their identity key, and the sealed copies are what
+the server stores. The server can open none of them.
 
-Share a project master key with approved collaborators through a separate secure channel such as an enterprise password manager. The server cannot recover a lost master key or decrypt stored environment files.
+Nothing secret is ever shared by hand. Inviting a colleague seals the project
+key to them in the same step; they run `greenbyte init` and can read the files.
+
+Because the project key is stored as per-member copies rather than one shared
+passphrase, it can be **rotated**. Removing someone and running
+`greenbyte rotate` mints a new key, re-encrypts every file under it, and seals
+it only to the people who remain — so the copy the departing member already had
+opens nothing new.
 
 ## Features
 
-- Client-side authenticated encryption, portable across devices and containers
-- Signup, email verification, login, refresh sessions, logout, and password reset
-- Project creation and device/project initialization
-- Owner, admin, member, and viewer permissions
-- Expiring single-use team invitations
-- Safe `.env*` push and pull
-- Local snapshots and immutable remote version history
-- Local and server-side rollback
-- Retry-safe, idempotent pushes
-- Project security audit log
-- Rate limits, request limits, structured logs, and health probes
-- SMTP support for deployed environments
+- End-to-end encryption: the server stores ciphertext and sealed keys, never plaintext or an openable key
+- Per-member key wrapping — no master key to copy into chat or a password manager
+- One-command key rotation for offboarding, applied all-or-nothing
+- Project names are unique per account, so two teams can both have a `backend`
+- Signup, email verification, sign-in, rotating refresh sessions, password reset
+- Owner, admin, member and viewer roles
+- Expiring, single-use invitations that are not credentials and cannot be forwarded
+- Versioned history, local snapshots, and rollback on either side
+- Retry-safe idempotent pushes
+- Per-project audit log
+- Rate limits, request limits, structured JSON logs, health probes
 - Non-root, read-only API container
 
 ## Prerequisites
@@ -97,11 +106,18 @@ Run it directly during development:
 cargo run -p greenbyte -- --help
 ```
 
-Or install the `greenbyte` command locally:
+Or install the `greenbyte` command. Any of these work:
 
 ```bash
-cargo install --path cli --locked
+cargo install greenbyte              # from crates.io
+cargo binstall greenbyte             # prebuilt binary, no compile
+cargo install --path cli --locked    # from this checkout
 ```
+
+Prebuilt binaries for Linux (gnu and musl, x86_64 and aarch64), macOS (Intel
+and Apple Silicon) and Windows are attached to every
+[GitHub release](https://github.com/NYLONXD/GreenByte_CLI/releases), each with a
+`.sha256` file to verify against.
 
 The CLI defaults to `http://localhost:3030`. It can also be set explicitly:
 
@@ -142,7 +158,13 @@ greenbyte push --file .env --message "initial configuration"
 greenbyte logs --remote
 ```
 
-`greenbyte create` displays the project master key once. Store it in a secure password manager. Never commit it or send it through ordinary chat or email.
+`greenbyte create` mints the project key and seals it to your identity. There is
+nothing to write down and nothing to store in a password manager — the sealed
+copy lives on the server and only your device can open it.
+
+Your identity key is created on first use at `~/.greenbyte-identity`. Treat it
+like an SSH private key. If you lose it, an admin can grant you access again; if
+it leaks, rotate the project key.
 
 Pull the current encrypted version back to disk:
 
@@ -169,43 +191,94 @@ The teammate retrieves the invitation token from their email, or from API logs i
 
 ```bash
 greenbyte register   # or `greenbyte login` for an existing account
-greenbyte init my-application
+greenbyte init
 ```
+
+`greenbyte init` takes no project name: the invitation identifies the project.
 
 Joining is performed as the signed-in account, and the server accepts the token only from the account it was issued to. An invitation is therefore not a credential: forwarding the email to somebody else gives them nothing, and the response contains no login tokens.
 
-The owner must share the project master key separately through a secure channel. Invitation tokens authorize membership but do not contain the encryption key.
+The project key was sealed to the teammate's identity when they were invited, so
+they can `greenbyte pull` immediately. Nothing is sent out of band.
+
+If `greenbyte add` reports that the account has no identity key, they have not
+signed in with a current CLI yet. One `greenbyte login` publishes it.
 
 Manage roles and membership with:
 
 ```bash
+greenbyte members
 greenbyte role <user-id> <admin|member|viewer>
 greenbyte remove <user-id>
 greenbyte audit
 ```
 
+### 7. Offboard someone
+
+Removing a member deletes their sealed key on the server and revokes their
+sessions, but they may have kept the key they already opened. Rotating is what
+makes that copy worthless:
+
+```bash
+greenbyte remove <user-id>
+greenbyte rotate
+```
+
+`greenbyte rotate` shows exactly what will happen before asking to proceed: the
+version it moves to, who receives the new key, and how many files will be
+re-encrypted. It refuses to start if any remaining member has no identity key to
+seal to, rather than silently locking them out.
+
+The server applies a rotation in one transaction and rejects it unless it covers
+every current member and every stored file — a half-applied rotation is worse
+than none. Afterwards, a client still holding the retired key gets a clear error
+on push instead of overwriting a file the team can no longer read.
+
+Everyone else runs `greenbyte pull` to pick up the new key. Project history
+stays readable: members keep their older key versions for reading the past.
+
+Use `greenbyte rotate -y` to skip the prompt in a script.
+
 ## CLI command reference
 
 ```text
-greenbyte register
-greenbyte login
-greenbyte logout
-greenbyte reset-password
-greenbyte create <project>
-greenbyte init <project>
-greenbyte add <email>
-greenbyte members
-greenbyte role <user-id> <admin|member|viewer>
-greenbyte remove <user-id>
-greenbyte push [-m <message>] [-f <.env-file>]
-greenbyte pull [-f <.env-file>] [--force]
-greenbyte commit <message>
-greenbyte logs [--file <output>]
-greenbyte logs --remote
-greenbyte rollback --local <snapshot-id>
-greenbyte rollback --address <remote-commit-id>
-greenbyte status
-greenbyte audit
+Account
+  greenbyte register                        create an account
+  greenbyte login                           sign in (also publishes your identity key)
+  greenbyte logout                          sign out on this machine
+  greenbyte whoami                          show the signed-in account
+  greenbyte reset-password                  request a token and set a new password
+
+Identity
+  greenbyte identity                        show this device's key and whether it is published
+  greenbyte identity publish                publish this device's public key
+  greenbyte identity export                 print the secret key, for another machine or CI
+  greenbyte identity replace                replace this device's key (needs re-granting)
+
+Projects
+  greenbyte create <project>                start a project here
+  greenbyte init [project]                  join a project you were invited to
+  greenbyte projects                        list projects you can reach
+
+Syncing
+  greenbyte push [-m <message>] [-f <file>] encrypt and upload a .env file
+  greenbyte pull [-f <file>] [--force]      download and decrypt
+  greenbyte commit <message>                take an encrypted local snapshot
+  greenbyte logs [--file <output>]          list local snapshots
+  greenbyte logs --remote                   show the project's server-side history
+  greenbyte rollback --local <id>           restore from a local snapshot
+  greenbyte rollback --address <commit>     roll the server back to a commit
+
+Collaboration
+  greenbyte add <email>                     invite, sealing the project key to them
+  greenbyte members                         list members, roles and key versions held
+  greenbyte role <user-id> <role>           set admin, member or viewer
+  greenbyte remove <user-id>                revoke access
+  greenbyte rotate [-y]                     retire the project key and issue a new one
+
+Inspection
+  greenbyte status                          what this directory is linked to
+  greenbyte audit                           the project's security audit log
 ```
 
 ## Architecture
@@ -219,37 +292,28 @@ greenbyte audit
 
 ### Project layout
 
+Both crates are laid out as vertical slices: one folder per capability, so
+adding a feature means adding a folder rather than growing a shared file.
+
 ```text
-cli/                      The `greenbyte` command-line tool
-  src/main.rs             Command definitions and dispatch
-  src/commands/           One file per group of commands
-    account.rs            register, login, logout, reset-password
-    project.rs            create, init
-    push_pull.rs          push, pull
-    snapshot.rs           commit (local encrypted snapshot)
-    history.rs            logs
-    rollback.rs           rollback
-    members.rs            add, members, remove, role
-    status.rs, audit.rs   status, audit
-  src/shared/             Helpers used by the commands
-    crypto.rs             Encryption and master-key handling
-    http.rs               Server URL, HTTP client, API error messages
-    env_files.rs          Finding, validating and writing .env files
-    storage.rs            Local project config, login session and snapshot log
-    device.rs             Device identity used when joining a project
-    terminal.rs           Prompts and spinners
-server/                   The API (Axum + PostgreSQL)
-  src/main.rs             Startup: config, database, migrations
-  src/lib.rs              Router: every endpoint is listed here
-  src/routes/             HTTP handlers (auth, users, projects, env_files, health)
-  src/security.rs         Password hashing, access/refresh tokens, logged-in user
-  src/permissions.rs      Project role checks
-  src/config.rs           Environment variables
-  migrations/             Database schema
-docs/API_CONTRACT.md      Endpoint reference
+cli/src/
+  cli.rs          the command surface and dispatch
+  commands/       one module per command group, thin over core
+  core/           crypto, API client, on-disk state - no terminal I/O
+  ui/             every prompt, spinner and line of output
+server/src/
+  app.rs          the whole URL surface, in one readable place
+  features/       accounts, projects, members, keys, env_files, audit, health
+  security/       sessions, passwords, tokens, permission checks
+  db/             row types and the audit recorder
+  infra/          email delivery and rate limiting
+  migrations/     database schema
 ```
 
-The API source is in [`server/src`](server/src), database migrations are in [`server/migrations`](server/migrations), and the endpoint contract is documented in [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md).
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) explains the layering rules, what
+belongs in each file, how to add a feature, and walks through key rotation end
+to end. [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) is the endpoint
+reference.
 
 ## Local files
 
@@ -258,6 +322,7 @@ The API source is in [`server/src`](server/src), database migrations are in [`se
 | `.greenbyte` | Linked project identity and scoped tokens | Atomic write; mode `0600` on Unix |
 | `.greenbyte-logs` | Encrypted local snapshots | Atomic write; mode `0600` on Unix |
 | `~/.greenbyte-auth` | Global login session | Atomic write; mode `0600` on Unix |
+| `~/.greenbyte-identity` | This device's identity key | Atomic write; mode `0600` on Unix |
 | `.env*` | Decrypted environment files | Atomic write; mode `0600` on Unix |
 
 Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*` to the application directory's `.gitignore`.
@@ -269,17 +334,28 @@ Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*
 | Variable | Default | Description |
 |---|---|---|
 | `GREENBYTE_SERVER` | `http://localhost:3030` | API URL; non-local servers must use HTTPS |
-| `GREENBYTE_MASTER_KEY` | unset | Project key for non-interactive automation |
+| `GREENBYTE_IDENTITY_KEY` | unset | Identity secret key for CI, instead of a file on disk |
+| `GREENBYTE_IDENTITY_FILE` | `~/.greenbyte-identity` | Where the identity key is stored |
+| `GREENBYTE_MASTER_KEY` | unset | Only for reading snapshots written before key wrapping |
 
-Every push sends a verifier for the key it encrypted with, and the server rejects content encrypted under anything but the project's master key. A mistyped or stale `GREENBYTE_MASTER_KEY` fails immediately instead of replacing the file with a payload the rest of the team cannot read.
+Every push declares which project key version it encrypted under, and the server
+rejects anything but the current one. A client that missed a rotation fails
+immediately with a message naming both versions, instead of replacing the file
+with a payload the rest of the team cannot read.
 
-For CI, inject the master key through the runner's secret environment:
+For CI, give the runner its own account and inject that account's identity key
+from the secret store:
 
 ```bash
-GREENBYTE_MASTER_KEY="$PROJECT_SECRET" greenbyte pull --file .env.ci --force
+GREENBYTE_IDENTITY_KEY="$GREENBYTE_CI_IDENTITY" greenbyte pull --file .env.ci --force
 ```
 
-Do not put the actual key directly into a script, command history, repository file, or CI log.
+Generate it once with `greenbyte identity export` on a machine signed in as the
+CI account. Because CI is a member like any other, revoking it is
+`greenbyte remove` followed by `greenbyte rotate` — the same as for a person.
+
+Do not put the key directly into a script, shell history, repository file or CI
+log.
 
 ### Backend
 
@@ -370,4 +446,6 @@ See [`SECURITY.md`](SECURITY.md) for the threat model and security reporting gui
 
 ## License
 
-No license file is currently included. Add an explicit license before distributing or accepting external contributions.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your
+option — the Rust ecosystem default. Change it before the first public release
+if you want different terms for the server.

@@ -1,178 +1,179 @@
-use crate::shared::{
-    device::get_device_mac,
-    env_files::env_file_path,
-    http::{http_client, server_url},
-    storage::{config_exists, load_config, load_global_auth, load_logs},
-};
+//! `greenbyte status` - what this directory is linked to and whether it works.
+
 use colored::Colorize;
 
-/// `greenbyte status`
-/// Shows the current state of the project — linked project, last commit, .env presence.
-pub async fn show() -> Result<(), String> {
-    println!(
-        "{}",
-        "─── Greenbyte Status ─────────────────────────────────".dimmed()
-    );
+use crate::{
+    commands::context::access_token,
+    core::{
+        api::{accounts, client::server_url, keys, projects, Session},
+        crypto::{identity, keyring::Keyring},
+        env_files::env_file_path,
+        workspace::{commit_log, global_auth, project_config},
+    },
+    ui,
+};
 
-    // ── Auth — fetch logged-in user from server ─────────────────────────────
-    let global_auth = load_global_auth().unwrap_or_default();
-    let project_config = if config_exists() {
-        Some(load_config()?)
-    } else {
-        None
-    };
-    let status_server = project_config
+pub async fn show() -> Result<(), String> {
+    ui::heading("Status");
+
+    let config = project_config::exists()
+        .then(project_config::load)
+        .transpose()?;
+    let server = config
         .as_ref()
         .map(|config| config.server_url.clone())
         .unwrap_or_else(server_url);
-    let session_token = global_auth.auth_token.as_ref().or_else(|| {
-        project_config
-            .as_ref()
-            .and_then(|config| config.auth_token.as_ref())
-    });
-    let has_session = session_token.is_some();
-    match session_token {
-        Some(token) => {
-            match fetch_me(token, &status_server).await {
-                Ok((username, email)) => {
-                    println!(
-                        "  {} Logged in as {} ({})",
-                        "●".green(),
-                        username.cyan().bold(),
-                        email.dimmed(),
-                    );
-                }
-                Err(e) => {
-                    // Token exists but server call failed — show local email as fallback
-                    eprintln!("  {} Could not verify session: {}", "⚠".yellow(), e);
-                    match &global_auth.email {
-                        Some(email) => println!(
-                            "  {} Logged in as {} {}",
-                            "●".yellow(),
-                            email.cyan(),
-                            "(could not reach server)".dimmed(),
-                        ),
-                        None => println!(
-                            "  {} Logged in {}",
-                            "●".yellow(),
-                            "(could not verify)".dimmed()
-                        ),
-                    }
-                }
-            }
-        }
-        None => println!("  {} Not logged in  (run `greenbyte login`)", "●".red()),
-    }
 
-    // ── Project ─────────────────────────────────────────────────────────────
-    if project_config.is_none() {
-        println!("  {} No project linked in this directory", "●".yellow());
-        println!(
-            "{}",
-            "─────────────────────────────────────────────────────".dimmed()
-        );
-        println!("  Run `greenbyte create <name>` or `greenbyte init <name>`");
+    let session = report_account(&server).await;
+    report_identity();
+
+    let Some(config) = config else {
+        println!();
+        ui::warn("No project linked in this directory.");
+        ui::note("Run `greenbyte create <name>` or `greenbyte init`.");
         return Ok(());
-    }
-
-    let config = project_config.expect("project config was checked above");
-
-    match &config.project_name {
-        Some(name) => println!("  {} Project:  {}", "●".green(), name.cyan().bold()),
-        None => println!("  {} Project:  {}", "●".yellow(), "unknown".dimmed()),
-    }
-
-    if let Some(id) = &config.project_id {
-        println!("  {} ID:       {}", "●".green(), id.dimmed());
-    }
-
-    // ── .env file ───────────────────────────────────────────────────────────
-    let env_path = env_file_path();
-    if env_path.exists() {
-        let metadata = std::fs::metadata(&env_path).ok();
-        let size = metadata.map(|m| m.len()).unwrap_or(0);
-        println!(
-            "  {} .env:     {} ({} bytes)",
-            "●".green(),
-            "present".green(),
-            size
-        );
-    } else {
-        println!(
-            "  {} .env:     {}",
-            "●".yellow(),
-            "not found  (run `greenbyte pull`)".yellow()
-        );
-    }
-
-    // ── Device MAC ──────────────────────────────────────────────────────────
-    match get_device_mac() {
-        Some(mac) if mac.len() >= 8 => println!(
-            "  {} Device:   {}...{}",
-            "●".green(),
-            &mac[..4],
-            &mac[mac.len() - 4..]
-        ),
-        // Only legacy snapshots are device-bound, so this is not a problem.
-        _ => println!(
-            "  {} Device:   {}",
-            "●".green(),
-            "no MAC address (not required)".dimmed()
-        ),
-    }
-
-    // ── Token status ─────────────────────────────────────────────────────────
-    let token_status = if has_session {
-        "present".green()
-    } else {
-        "missing".red()
     };
-    println!("  {} Token:    {}", "●".green(), token_status);
-    let logs = load_logs().unwrap_or_default();
-    let count = logs.commits.len();
-    if count == 0 {
-        println!("  {} Commits:  none yet", "●".dimmed());
-    } else {
-        let latest = logs.commits.last().unwrap();
-        println!(
-            "  {} Commits:  {} total  |  latest: [{}] \"{}\"",
-            "●".green(),
-            count,
-            &latest.id[..8].cyan(),
-            latest.message.dimmed()
-        );
-    }
 
-    println!(
-        "{}",
-        "─────────────────────────────────────────────────────".dimmed()
-    );
+    println!();
+    ui::field("Project", &config.qualified_name());
+    if let Some(id) = &config.project_id {
+        ui::field("ID", id);
+    }
+    ui::field("Server", &config.server_url);
+
+    if let (Some(session), Some(project_id)) = (&session, config.project_id.as_deref()) {
+        report_project_key(session, project_id).await;
+    }
+    report_env_file();
+    report_snapshots();
     Ok(())
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-async fn fetch_me(token: &str, server: &str) -> Result<(String, String), String> {
-    let client = http_client()?;
-    let res = client
-        .get(format!("{}/users/me", server.trim_end_matches('/')))
-        .bearer_auth(token)
-        .send()
-        .await
-        .map_err(|e| format!("Network error: {}", e))?;
-
-    if !res.status().is_success() {
-        return Err(format!("Server returned {}", res.status()));
+/// Confirms the stored session still works, rather than just that a token file
+/// exists.
+async fn report_account(server: &str) -> Option<Session> {
+    let stored = global_auth::load().unwrap_or_default();
+    let Ok(token) = access_token(server, None).await else {
+        ui::field(
+            "Account",
+            &"not signed in (run `greenbyte login`)".red().to_string(),
+        );
+        return None;
+    };
+    let Ok(session) = Session::new(server, token) else {
+        ui::field("Account", &"unusable server URL".red().to_string());
+        return None;
+    };
+    match accounts::me(&session).await {
+        Ok(profile) => {
+            ui::field(
+                "Account",
+                &format!("{} <{}>", profile.username.cyan(), profile.email),
+            );
+            if profile.public_key.is_none() {
+                ui::warn("No identity key published. Run `greenbyte identity publish`.");
+            }
+            Some(session)
+        }
+        Err(error) => {
+            ui::field(
+                "Account",
+                &stored.email.unwrap_or_else(|| "unknown".to_string()),
+            );
+            ui::warn(&format!("Could not reach the server: {error}"));
+            None
+        }
     }
+}
 
-    // Parse as Value so extra MongoDB fields (_id, files, owner, etc.) don't break us
-    let body: serde_json::Value = res
-        .json()
-        .await
-        .map_err(|e| format!("Parse error: {}", e))?;
+fn report_identity() {
+    match identity::load_or_create() {
+        Ok((identity, created)) => {
+            ui::field("Identity", &identity.fingerprint());
+            if created {
+                ui::note("Created just now; publish it with `greenbyte identity publish`.");
+            }
+        }
+        Err(error) => ui::warn(&format!("Identity key unavailable: {error}")),
+    }
+}
 
-    let username = body["username"].as_str().unwrap_or("unknown").to_string();
-    let email = body["email"].as_str().unwrap_or("unknown").to_string();
+/// Reports which project key versions this device can actually open - the
+/// question that matters after a rotation.
+async fn report_project_key(session: &Session, project_id: &str) {
+    let held = match keys::grants(session, project_id).await {
+        Ok(grants) => grants,
+        Err(error) => {
+            ui::field("Project key", &"unavailable".yellow().to_string());
+            ui::note(&error);
+            return;
+        }
+    };
+    let Ok((identity, _)) = identity::load_or_create() else {
+        ui::field("Project key", &"identity unavailable".yellow().to_string());
+        return;
+    };
+    // Report what actually opens, not merely what was handed over.
+    let keyring = match Keyring::open(held, &identity) {
+        Ok(keyring) => keyring,
+        Err(error) => {
+            ui::field("Project key", &"unreadable".red().to_string());
+            ui::note(&error);
+            ui::note("If you replaced your identity key, ask an admin to re-grant access.");
+            return;
+        }
+    };
+    let versions: Vec<String> = keyring.versions().iter().map(i32::to_string).collect();
+    let newest = keyring.current_version();
 
-    Ok((username, email))
+    match projects::current_key_version(session, project_id).await {
+        Ok(current) if current == newest => {
+            ui::field("Project key", &format!("v{current} (current)"));
+        }
+        Ok(current) => {
+            ui::field(
+                "Project key",
+                &format!("v{newest} - project is on v{current}")
+                    .yellow()
+                    .to_string(),
+            );
+            ui::note("Ask an admin to grant you the current key.");
+        }
+        Err(_) => ui::field("Project key", &format!("v{newest}")),
+    }
+    if versions.len() > 1 {
+        ui::note(&format!(
+            "Also holds versions {} for reading history.",
+            versions.join(", ")
+        ));
+    }
+}
+
+fn report_env_file() {
+    let path = env_file_path();
+    if path.exists() {
+        let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+        ui::field(".env", &format!("present ({size} bytes)"));
+    } else {
+        ui::field(
+            ".env",
+            &"not found (run `greenbyte pull`)".yellow().to_string(),
+        );
+    }
+}
+
+fn report_snapshots() {
+    let store = commit_log::load().unwrap_or_default();
+    match store.commits.last() {
+        None => ui::field("Snapshots", "none yet"),
+        Some(latest) => ui::field(
+            "Snapshots",
+            &format!(
+                "{} total, latest [{}] \"{}\"",
+                store.commits.len(),
+                &latest.id[..8],
+                latest.message
+            ),
+        ),
+    }
 }

@@ -1,318 +1,514 @@
-use std::sync::Arc;
+//! End-to-end API behaviour: collaboration, invitations, per-owner project
+//! names, and key rotation.
 
-use async_trait::async_trait;
-use axum::{
-    body::Body,
-    http::{Request, StatusCode},
-};
-use greenbyte_server::{
-    app,
-    config::{Config, EmailConfig},
-    email::EmailSender,
-    rate_limit::RateLimiter,
-    state::AppState,
-};
-use http_body_util::BodyExt;
+mod harness;
+
+use axum::http::StatusCode;
+use harness::{wrapped_for, Harness};
 use serde_json::{json, Value};
 use sqlx::PgPool;
-use tokio::sync::Mutex;
-use tower::ServiceExt;
 
-/// The verifier the project is created with. Pushes must present the same one.
-const PROJECT_KEY_HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const OTHER_KEY_HASH: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const CIPHERTEXT_V1: &str = "greenbyte:v3:opaque-under-key-1";
+const CIPHERTEXT_V2: &str = "greenbyte:v3:opaque-under-key-2";
 
-#[derive(Default)]
-struct CaptureEmail {
-    token: Mutex<Option<String>>,
-    verification_tokens: Mutex<std::collections::HashMap<String, String>>,
-}
+#[sqlx::test]
+async fn invited_collaborator_receives_a_sealed_project_key(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
 
-#[async_trait]
-impl EmailSender for CaptureEmail {
-    async fn send_verification(&self, recipient: &str, token: &str) -> Result<(), String> {
-        self.verification_tokens
-            .lock()
-            .await
-            .insert(recipient.to_string(), token.to_string());
-        Ok(())
-    }
+    let (status, project) = api
+        .call(
+            "POST",
+            "/projects",
+            Some(&alice.token),
+            json!({ "name": "payments", "wrapped_key": wrapped_for("alice", 1) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let project_id = project["project_id"].as_str().unwrap().to_string();
+    assert_eq!(project["key_version"], 1);
 
-    async fn send_password_reset(&self, _recipient: &str, _token: &str) -> Result<(), String> {
-        Ok(())
-    }
+    // Alice can read the key sealed to her at creation.
+    let (status, grants) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/keys"),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(grants[0]["key_version"], 1);
+    assert_eq!(grants[0]["wrapped_key"], wrapped_for("alice", 1));
 
-    async fn send_invitation(
-        &self,
-        _recipient: &str,
-        _project: &str,
-        token: &str,
-        _cli_url: &str,
-    ) -> Result<(), String> {
-        *self.token.lock().await = Some(token.to_string());
-        Ok(())
-    }
+    let push = json!({
+        "project_id": project_id,
+        "filename": ".env",
+        "content": CIPHERTEXT_V1,
+        "message": "initial",
+        "commit_id": "11111111-1111-4111-8111-111111111111",
+        "key_version": 1,
+    });
+    let (status, pushed) = api
+        .call("POST", "/users/me/env", Some(&alice.token), push.clone())
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // A retried push with the same commit id is idempotent, not a duplicate.
+    let (status, retried) = api
+        .call("POST", "/users/me/env", Some(&alice.token), push)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(retried["commit_id"], pushed["commit_id"]);
+
+    // Bob is a stranger until invited.
+    let (status, _) = api
+        .call(
+            "GET",
+            &format!("/users/me/env?project_id={project_id}"),
+            Some(&bob.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Alice looks up Bob's identity key, then invites him with the project key
+    // sealed to it. No key ever travels out of band.
+    let (status, lookup) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/collaborators/lookup"),
+            Some(&alice.token),
+            json!({ "email": bob.email }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(lookup["public_key"], bob.public_key);
+
+    let (status, _) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/collaborators"),
+            Some(&alice.token),
+            json!({ "email": bob.email, "wrapped_key": wrapped_for("bob", 1) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ott = api.email.invitation.lock().await.clone().unwrap();
+
+    let join = json!({
+        "ott": ott,
+        "refresher_token": "b".repeat(64),
+        "mac_address": "aabbccddeeff",
+    });
+
+    // An invitation proves you were invited, not who you are: it is not a
+    // credential, and it is bound to the account it names.
+    let (status, _) = api.call("POST", "/projects/join", None, join.clone()).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = api
+        .call("POST", "/projects/join", Some(&alice.token), join.clone())
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, joined) = api
+        .call("POST", "/projects/join", Some(&bob.token), join)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(joined["project_name"], "payments");
+    assert_eq!(joined["owner_username"], "alice");
+    assert!(joined["auth_token"].is_null());
+    assert!(joined["refresh_token"].is_null());
+
+    // Bob now holds a key sealed to him, and can read the ciphertext.
+    let (status, grants) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/keys"),
+            Some(&bob.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(grants[0]["wrapped_key"], wrapped_for("bob", 1));
+
+    let (status, files) = api
+        .call(
+            "GET",
+            &format!("/users/me/env?project_id={project_id}"),
+            Some(&bob.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(files[0]["filename"], ".env");
+    assert_eq!(files[0]["content"], CIPHERTEXT_V1);
+    assert_eq!(files[0]["key_version"], 1);
 }
 
 #[sqlx::test]
-async fn account_project_invitation_and_ciphertext_flow(pool: PgPool) {
-    sqlx::migrate!("./migrations").run(&pool).await.unwrap();
-    let email = Arc::new(CaptureEmail::default());
-    let state = AppState {
-        pool,
-        config: Arc::new(test_config()),
-        email: email.clone(),
-        general_limiter: Arc::new(RateLimiter::per_minute(1_000)),
-        auth_limiter: Arc::new(RateLimiter::per_minute(1_000)),
+async fn two_owners_may_use_the_same_project_name(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+
+    let create = |token: String| {
+        let router = &api;
+        async move {
+            router
+                .call(
+                    "POST",
+                    "/projects",
+                    Some(&token),
+                    json!({ "name": "backend", "wrapped_key": wrapped_for("owner", 1) }),
+                )
+                .await
+        }
     };
-    let router = app(state);
 
-    let alice = call_json(
-        &router,
-        "POST",
-        "/auth/signup",
-        None,
-        json!({"username":"alice","email":"alice@example.com","password":"a-secure-password"}),
-    )
-    .await;
-    assert_eq!(alice.0, StatusCode::OK);
-    assert_eq!(alice.1["verification_required"], true);
-    let alice_verification = email
-        .verification_tokens
+    let (status, _) = create(alice.token.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The same name under a different owner is fine - names are scoped to the
+    // account, not to the installation.
+    let (status, _) = create(bob.token.clone()).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The same name twice under one owner is still a conflict, with a message
+    // that explains the scoping.
+    let (status, conflict) = create(alice.token).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        conflict["error"]
+            .as_str()
+            .unwrap()
+            .contains("within your own account"),
+        "{conflict}"
+    );
+
+    let (status, projects) = api
+        .call("GET", "/projects", Some(&bob.token), Value::Null)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(projects[0]["name"], "backend");
+    assert_eq!(projects[0]["owner_username"], "bob");
+}
+
+#[sqlx::test]
+async fn rotation_retires_a_removed_member(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+
+    // Bob leaves. His grants go immediately, but he may have kept the key he
+    // already unwrapped - the response says so.
+    let (status, removed) = api
+        .call(
+            "DELETE",
+            &format!("/projects/{project_id}/collaborators/{}", bob.user_id),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(removed["rotation_required"], true);
+
+    let (status, _) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/keys"),
+            Some(&bob.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Alice rotates: a new key for the members who remain, every file
+    // re-encrypted under it.
+    let (status, rotated) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/key-rotations"),
+            Some(&alice.token),
+            json!({
+                "grants": [
+                    { "user_id": alice.user_id, "wrapped_key": wrapped_for("alice", 2) }
+                ],
+                "files": [{ "filename": ".env", "content": CIPHERTEXT_V2 }],
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{rotated}");
+    assert_eq!(rotated["key_version"], 2);
+    assert_eq!(rotated["members_granted"], 1);
+    assert_eq!(rotated["files_reencrypted"], 1);
+
+    // Alice holds both versions, so project history stays readable to her.
+    let (status, grants) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/keys"),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let versions: Vec<i64> = grants
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|grant| grant["key_version"].as_i64().unwrap())
+        .collect();
+    assert_eq!(versions, vec![1, 2]);
+
+    // The stored file now sits on the new key.
+    let (status, files) = api
+        .call(
+            "GET",
+            &format!("/users/me/env?project_id={project_id}"),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(files[0]["content"], CIPHERTEXT_V2);
+    assert_eq!(files[0]["key_version"], 2);
+
+    // A client still holding the retired key cannot overwrite the file.
+    let (status, stale) = api
+        .call(
+            "POST",
+            "/users/me/env",
+            Some(&alice.token),
+            json!({
+                "project_id": project_id,
+                "filename": ".env",
+                "content": CIPHERTEXT_V1,
+                "message": "stale client",
+                "key_version": 1,
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        stale["error"].as_str().unwrap().contains("version 2"),
+        "{stale}"
+    );
+
+    let (status, audit) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/audit"),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let actions: Vec<&str> = audit
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["action"].as_str().unwrap())
+        .collect();
+    assert!(actions.contains(&"project.key_rotated"), "{actions:?}");
+    assert!(actions.contains(&"collaborator.removed"), "{actions:?}");
+}
+
+#[sqlx::test]
+async fn a_partial_rotation_is_refused(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+
+    // Leaving a member out would lock them out of their own project.
+    let (status, missing_member) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/key-rotations"),
+            Some(&alice.token),
+            json!({
+                "grants": [
+                    { "user_id": alice.user_id, "wrapped_key": wrapped_for("alice", 2) }
+                ],
+                "files": [{ "filename": ".env", "content": CIPHERTEXT_V2 }],
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(
+        missing_member["error"]
+            .as_str()
+            .unwrap()
+            .contains("all 2 current members"),
+        "{missing_member}"
+    );
+
+    // Leaving a file out would leave it readable with the retired key.
+    let (status, missing_file) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/key-rotations"),
+            Some(&alice.token),
+            json!({
+                "grants": [
+                    { "user_id": alice.user_id, "wrapped_key": wrapped_for("alice", 2) },
+                    { "user_id": bob.user_id, "wrapped_key": wrapped_for("bob", 2) }
+                ],
+                "files": [],
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(
+        missing_file["error"]
+            .as_str()
+            .unwrap()
+            .contains("all 1 stored files"),
+        "{missing_file}"
+    );
+
+    // A non-admin cannot rotate at all.
+    let (status, _) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/key-rotations"),
+            Some(&bob.token),
+            json!({ "grants": [], "files": [] }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    // Nothing was applied: the project is still on version 1.
+    let (status, files) = api
+        .call(
+            "GET",
+            &format!("/users/me/env?project_id={project_id}"),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(files[0]["key_version"], 1);
+}
+
+#[sqlx::test]
+async fn an_account_without_an_identity_key_cannot_be_invited(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+
+    // Register Carol but never publish a key for her.
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/signup",
+            None,
+            json!({
+                "username": "carol",
+                "email": "carol@example.com",
+                "password": "a-sufficiently-long-password",
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let verification = api
+        .email
+        .verifications
         .lock()
         .await
-        .get("alice@example.com")
+        .get("carol@example.com")
         .cloned()
         .unwrap();
-    let alice = call_json(
-        &router,
+    api.call(
         "POST",
         "/auth/verify-email",
         None,
-        json!({"email":"alice@example.com","token":alice_verification}),
+        json!({ "email": "carol@example.com", "token": verification }),
     )
     .await;
-    assert_eq!(alice.0, StatusCode::OK);
-    let alice_token = alice.1["token"].as_str().unwrap();
 
-    let bob = call_json(
-        &router,
-        "POST",
-        "/auth/signup",
-        None,
-        json!({"username":"bob","email":"bob@example.com","password":"another-secure-password"}),
-    )
-    .await;
-    assert_eq!(bob.0, StatusCode::OK);
-    let bob_verification = email
-        .verification_tokens
-        .lock()
-        .await
-        .get("bob@example.com")
-        .cloned()
-        .unwrap();
-    let bob = call_json(
-        &router,
-        "POST",
-        "/auth/verify-email",
-        None,
-        json!({"email":"bob@example.com","token":bob_verification}),
-    )
-    .await;
-    assert_eq!(bob.0, StatusCode::OK);
-    let bob_token = bob.1["token"].as_str().unwrap();
+    let (status, project) = api
+        .call(
+            "POST",
+            "/projects",
+            Some(&alice.token),
+            json!({ "name": "payments", "wrapped_key": wrapped_for("alice", 1) }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let project_id = project["project_id"].as_str().unwrap();
 
-    let project = call_json(
-        &router,
-        "POST",
-        "/projects",
-        Some(alice_token),
-        json!({"name":"payments","master_key_hash":PROJECT_KEY_HASH}),
-    )
-    .await;
-    assert_eq!(project.0, StatusCode::OK);
-    let project_id = project.1["project_id"].as_str().unwrap();
+    let (status, body) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/collaborators/lookup"),
+            Some(&alice.token),
+            json!({ "email": "carol@example.com" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(
+        body["error"]
+            .as_str()
+            .unwrap()
+            .contains("has not published an identity key"),
+        "{body}"
+    );
+}
 
-    let push_body = json!({
-        "project_id":project_id,
-        "filename":".env",
-        "content":"greenbyte:v2:opaque",
-        "message":"initial",
-        "commit_id":"11111111-1111-4111-8111-111111111111",
-        "master_key_hash":PROJECT_KEY_HASH
-    });
-    let pushed = call_json(
-        &router,
+/// Alice owns a project with one `.env` file; Bob is a member. Both hold a
+/// key sealed at version 1.
+async fn collaborative_project(
+    api: &Harness,
+    alice: &harness::Account,
+    bob: &harness::Account,
+) -> String {
+    let (_, project) = api
+        .call(
+            "POST",
+            "/projects",
+            Some(&alice.token),
+            json!({ "name": "payments", "wrapped_key": wrapped_for("alice", 1) }),
+        )
+        .await;
+    let project_id = project["project_id"].as_str().unwrap().to_string();
+
+    api.call(
         "POST",
         "/users/me/env",
-        Some(alice_token),
-        push_body.clone(),
-    )
-    .await;
-    assert_eq!(pushed.0, StatusCode::OK);
-
-    let retried = call_json(
-        &router,
-        "POST",
-        "/users/me/env",
-        Some(alice_token),
-        push_body,
-    )
-    .await;
-    assert_eq!(retried.0, StatusCode::OK);
-    assert_eq!(retried.1["commit_id"], pushed.1["commit_id"]);
-
-    // Content encrypted under a different key must never reach storage.
-    let wrong_key = call_json(
-        &router,
-        "POST",
-        "/users/me/env",
-        Some(alice_token),
+        Some(&alice.token),
         json!({
-            "project_id":project_id,
-            "filename":".env",
-            "content":"greenbyte:v2:encrypted-with-the-wrong-key",
-            "message":"oops",
-            "commit_id":"22222222-2222-4222-8222-222222222222",
-            "master_key_hash":OTHER_KEY_HASH
+            "project_id": project_id,
+            "filename": ".env",
+            "content": CIPHERTEXT_V1,
+            "message": "initial",
+            "key_version": 1,
         }),
     )
     .await;
-    assert_eq!(wrong_key.0, StatusCode::CONFLICT);
 
-    let history = call_json(
-        &router,
-        "GET",
-        &format!("/projects/{project_id}/commits"),
-        Some(alice_token),
-        Value::Null,
-    )
-    .await;
-    assert_eq!(history.0, StatusCode::OK);
-    assert_eq!(history.1.as_array().unwrap().len(), 1);
-
-    let forbidden = call_json(
-        &router,
-        "GET",
-        &format!("/users/me/env?project_id={project_id}"),
-        Some(bob_token),
-        Value::Null,
-    )
-    .await;
-    assert_eq!(forbidden.0, StatusCode::FORBIDDEN);
-
-    let invited = call_json(
-        &router,
+    api.call(
         "POST",
         &format!("/projects/{project_id}/collaborators"),
-        Some(alice_token),
-        json!({"email":"bob@example.com"}),
+        Some(&alice.token),
+        json!({ "email": bob.email, "wrapped_key": wrapped_for("bob", 1) }),
     )
     .await;
-    assert_eq!(invited.0, StatusCode::OK);
-    let ott = email.token.lock().await.clone().unwrap();
-
-    // An invitation is not a credential. It cannot be redeemed anonymously,
-    // and it cannot be redeemed by whoever it was forwarded to.
-    let join_body = json!({
-        "ott":ott,
-        "refresher_token":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-        "mac_address":"aabbccddeeff"
-    });
-
-    let anonymous = call_json(
-        &router,
-        "POST",
-        "/projects/payments/join",
-        None,
-        join_body.clone(),
-    )
-    .await;
-    assert_eq!(anonymous.0, StatusCode::UNAUTHORIZED);
-
-    let wrong_account = call_json(
-        &router,
-        "POST",
-        "/projects/payments/join",
-        Some(alice_token),
-        join_body.clone(),
-    )
-    .await;
-    assert_eq!(wrong_account.0, StatusCode::FORBIDDEN);
-
-    let joined = call_json(
-        &router,
-        "POST",
-        "/projects/payments/join",
-        Some(bob_token),
-        join_body,
-    )
-    .await;
-    assert_eq!(joined.0, StatusCode::OK);
-    // The response must never hand out account credentials.
-    assert!(joined.1["auth_token"].is_null());
-    assert!(joined.1["refresh_token"].is_null());
-
-    // Bob reaches the project with the session he already had.
-    let pulled = call_json(
-        &router,
-        "GET",
-        &format!("/users/me/env?project_id={project_id}"),
-        Some(bob_token),
-        Value::Null,
-    )
-    .await;
-    assert_eq!(pulled.0, StatusCode::OK);
-    assert_eq!(pulled.1[0]["filename"], ".env");
-    assert_eq!(pulled.1[0]["content"], "greenbyte:v2:opaque");
-}
-
-async fn call_json(
-    router: &axum::Router,
-    method: &str,
-    uri: &str,
-    token: Option<&str>,
-    body: Value,
-) -> (StatusCode, Value) {
-    let mut builder = Request::builder()
-        .method(method)
-        .uri(uri)
-        .header("content-type", "application/json");
-    if let Some(token) = token {
-        builder = builder.header("authorization", format!("Bearer {token}"));
-    }
-    let bytes = if body.is_null() {
-        Vec::new()
-    } else {
-        serde_json::to_vec(&body).unwrap()
-    };
-    let response = router
-        .clone()
-        .oneshot(builder.body(Body::from(bytes)).unwrap())
-        .await
-        .unwrap();
-    let status = response.status();
-    let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
-    (status, value)
-}
-
-fn test_config() -> Config {
-    Config {
-        environment: "test".to_string(),
-        bind_addr: "127.0.0.1:0".parse().unwrap(),
-        database_url: "unused".to_string(),
-        jwt_secret: "test-secret-that-is-at-least-thirty-two-characters".to_string(),
-        jwt_issuer: "greenbyte-test".to_string(),
-        access_token_ttl_seconds: 3600,
-        refresh_token_ttl_days: 30,
-        invite_ttl_hours: 24,
-        email_verification_ttl_hours: 2,
-        password_reset_ttl_minutes: 30,
-        database_max_connections: 5,
-        public_cli_url: "https://example.com".to_string(),
-        rate_limit_per_minute: 1_000,
-        auth_rate_limit_per_minute: 1_000,
-        email: EmailConfig::Log,
-    }
+    let ott = api.email.invitation.lock().await.clone().unwrap();
+    let (status, _) = api
+        .call(
+            "POST",
+            "/projects/join",
+            Some(&bob.token),
+            json!({
+                "ott": ott,
+                "refresher_token": "b".repeat(64),
+                "mac_address": "aabbccddeeff",
+            }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    project_id
 }

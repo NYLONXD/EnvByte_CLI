@@ -7,3 +7,19 @@ resolver = "2"
 [profile.release]
 opt-level = 3
 strip = true
+
+# Argon2 and the AEAD primitives are unusably slow when built unoptimised,
+# which made the test suite take minutes. Optimising just these packages keeps
+# debug builds fast to compile while password hashing stays quick.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+[profile.dev.package.aes]
+opt-level = 3
+[profile.dev.package.aes-gcm]
+opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3
+[profile.dev.package.curve25519-dalek]
+opt-level = 3
