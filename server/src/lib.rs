@@ -1,4 +1,4 @@
-//! Greenbyte API.
+//! Envbyte API.
 //!
 //! Layering, outermost first:
 //!   `app`      - router assembly and shared middleware

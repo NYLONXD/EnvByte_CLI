@@ -33,12 +33,12 @@ stretching, because there is no password to stretch.
 
 ## Threat model
 
-Greenbyte protects environment-file contents from the storage service and from
+Envbyte protects environment-file contents from the storage service and from
 disclosure of stored ciphertext. An attacker holding the full database sees
 ciphertext, sealed keys they cannot open, and metadata: account identifiers,
 project and file names, payload sizes, timestamps, and the audit trail.
 
-Greenbyte does **not** protect against an attacker who obtains a member's
+Envbyte does **not** protect against an attacker who obtains a member's
 identity key, their decrypted `.env` files, their process memory, or an active
 session. It cannot recover a lost identity key — but, unlike a shared master
 key, losing one costs nothing permanent: an admin re-grants access.
@@ -58,7 +58,7 @@ runners remain supported.
 Removing a member deletes their sealed keys and revokes their device sessions.
 It does not, and cannot, unlearn the data key they already opened.
 
-`greenbyte rotate` is what retires that key. It mints a new data key,
+`envbyte rotate` is what retires that key. It mints a new data key,
 re-encrypts every stored file under it, and seals it only to current members.
 The server applies this in one transaction and rejects it unless it covers
 every current member and every stored file, because a partial rotation is worse
@@ -93,14 +93,14 @@ a device is lost, or a CI secret store is compromised.
 
 ## Client guidance
 
-- `~/.greenbyte-identity` is as sensitive as an SSH private key. It is written
+- `~/.envbyte-identity` is as sensitive as an SSH private key. It is written
   `0600` and never transmitted.
 - Give CI its own account rather than reusing a person's identity, so revoking
   CI does not mean rotating a human's key. Inject it via
-  `GREENBYTE_IDENTITY_KEY` from the runner's secret store.
-- Treat `.greenbyte`, `.greenbyte-logs`, `~/.greenbyte-auth` and every `.env*`
+  `ENVBYTE_IDENTITY_KEY` from the runner's secret store.
+- Treat `.envbyte`, `.envbyte-logs`, `~/.envbyte-auth` and every `.env*`
   as sensitive. Project initialization adds them to `.gitignore`.
 - Check shell debug output and CI logs to confirm environment variables are not
   echoed.
 - Confirm a colleague's identity fingerprint out of band when the project
-  warrants it. `greenbyte add` prints the fingerprint it is sealing to.
+  warrants it. `envbyte add` prints the fingerprint it is sealing to.

@@ -4,8 +4,8 @@ Two crates in one workspace. The CLI does all the cryptography; the server
 stores ciphertext it cannot read and enforces who may touch what.
 
 ```
-greenbyte/
-├── cli/      the `greenbyte` binary — every key operation happens here
+envbyte/
+├── cli/      the `envbyte` binary — every key operation happens here
 └── server/   the API — sealed keys, ciphertext, membership, audit
 ```
 
@@ -100,7 +100,7 @@ module starts holding logic worth testing, that logic belongs in `core`.
 
 ```
 identity key            X25519, one per device, never leaves it
-      │                 ~/.greenbyte-identity, or $GREENBYTE_IDENTITY_KEY
+      │                 ~/.envbyte-identity, or $ENVBYTE_IDENTITY_KEY
       │ opens
       ▼
 project data key        32 random bytes, one version per rotation
@@ -115,7 +115,9 @@ project data key        32 random bytes, one version per rotation
   replayed at a different recipient.
 - **The envelope** (`core/crypto/envelope.rs`) — `greenbyte:v3:` payloads carry
   their key version in authenticated data, so relabelling one as another version
-  fails to verify.
+  fails to verify. The `greenbyte:` tags date from the project's earlier name
+  and are kept on purpose: they are part of the authenticated data and the key
+  derivation, so renaming them would make existing data unreadable.
 - **The keyring** (`core/crypto/keyring.rs`) — a member holds every version they
   were present for. New writes use the newest; older ones keep history readable.
 
@@ -127,10 +129,10 @@ metadata (filenames, sizes, timestamps, who did what).
 The one flow worth reading end to end, because it is what makes offboarding
 real.
 
-1. `greenbyte remove <user>` — deletes that member's sealed keys server-side and
+1. `envbyte remove <user>` — deletes that member's sealed keys server-side and
    revokes their device sessions. **They may still hold the key they already
    opened.** The response says so.
-2. `greenbyte rotate` —
+2. `envbyte rotate` —
    - fetches members, files and the current key version;
    - refuses to start if any member has no published identity key, rather than
      silently locking them out;

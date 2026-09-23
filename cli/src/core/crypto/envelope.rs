@@ -21,6 +21,9 @@ use zeroize::Zeroize;
 
 use crate::core::crypto::DataKey;
 
+// These tags predate the rename to Envbyte and are deliberately kept. The AAD
+// is authenticated by AES-GCM, so changing it would make every stored file
+// undecryptable; users never see any of them.
 const V3_PREFIX: &str = "greenbyte:v3:";
 const V3_AAD: &[u8] = b"greenbyte:v3";
 const V2_PREFIX: &str = "greenbyte:v2:";

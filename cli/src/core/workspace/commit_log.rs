@@ -1,4 +1,4 @@
-//! `.greenbyte-logs` - local encrypted snapshots, the offline half of history.
+//! `.envbyte-logs` - local encrypted snapshots, the offline half of history.
 
 use std::path::{Path, PathBuf};
 
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::workspace::paths::secure_atomic_write;
 
-const LOGS_FILE: &str = ".greenbyte-logs";
+const LOGS_FILE: &str = ".envbyte-logs";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalCommit {
@@ -40,9 +40,9 @@ pub fn load() -> Result<CommitLog, String> {
     if !path.exists() {
         return Ok(CommitLog::default());
     }
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|e| format!("Could not read .greenbyte-logs: {e}"))?;
-    serde_json::from_str(&raw).map_err(|e| format!("Corrupt .greenbyte-logs: {e}"))
+    let raw =
+        std::fs::read_to_string(&path).map_err(|e| format!("Could not read .envbyte-logs: {e}"))?;
+    serde_json::from_str(&raw).map_err(|e| format!("Corrupt .envbyte-logs: {e}"))
 }
 
 pub fn save(store: &CommitLog) -> Result<(), String> {

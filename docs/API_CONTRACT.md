@@ -1,4 +1,4 @@
-# Greenbyte API contract
+# Envbyte API contract
 
 This document describes the server interface consumed by CLI v0.3. All request and response bodies are JSON. Remote deployments must use HTTPS.
 

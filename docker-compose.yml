@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: greenbyte
-      POSTGRES_USER: greenbyte
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-greenbyte-local-change-me}
+      POSTGRES_DB: envbyte
+      POSTGRES_USER: envbyte
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-envbyte-local-change-me}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
-      - greenbyte-postgres:/var/lib/postgresql/data
+      - envbyte-postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U greenbyte -d greenbyte"]
+      test: ["CMD-SHELL", "pg_isready -U envbyte -d envbyte"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -21,12 +21,12 @@ services:
       context: .
       dockerfile: server/Dockerfile
     environment:
-      GREENBYTE_ENV: development
-      GREENBYTE_BIND: 0.0.0.0:3030
-      DATABASE_URL: postgres://greenbyte:${POSTGRES_PASSWORD:-greenbyte-local-change-me}@postgres:5432/greenbyte
-      GREENBYTE_JWT_SECRET: ${GREENBYTE_JWT_SECRET:-local-development-secret-change-before-production}
-      GREENBYTE_EMAIL_MODE: ${GREENBYTE_EMAIL_MODE:-log}
-      RUST_LOG: ${RUST_LOG:-greenbyte_server=info,tower_http=info}
+      ENVBYTE_ENV: development
+      ENVBYTE_BIND: 0.0.0.0:3030
+      DATABASE_URL: postgres://envbyte:${POSTGRES_PASSWORD:-envbyte-local-change-me}@postgres:5432/envbyte
+      ENVBYTE_JWT_SECRET: ${ENVBYTE_JWT_SECRET:-local-development-secret-change-before-production}
+      ENVBYTE_EMAIL_MODE: ${ENVBYTE_EMAIL_MODE:-log}
+      RUST_LOG: ${RUST_LOG:-envbyte_server=info,tower_http=info}
     ports:
       - "127.0.0.1:3030:3030"
     depends_on:
@@ -47,4 +47,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  greenbyte-postgres:
+  envbyte-postgres:

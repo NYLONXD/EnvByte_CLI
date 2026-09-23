@@ -1,4 +1,4 @@
-//! `.greenbyte` - links a directory to a project.
+//! `.envbyte` - links a directory to a project.
 //!
 //! Holds no key material. The project key is sealed on the server and opened
 //! with the device identity, so losing this file costs you nothing but the
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::workspace::paths::secure_atomic_write;
 
-const CONFIG_FILE: &str = ".greenbyte";
+const CONFIG_FILE: &str = ".envbyte";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProjectConfig {
@@ -46,7 +46,7 @@ impl ProjectConfig {
     pub fn require_project_id(&self) -> Result<&str, String> {
         self.project_id
             .as_deref()
-            .ok_or_else(|| "The local .greenbyte file has no project ID.".to_string())
+            .ok_or_else(|| "The local .envbyte file has no project ID.".to_string())
     }
 }
 
@@ -62,14 +62,14 @@ pub fn load() -> Result<ProjectConfig, String> {
     let path = config_path();
     if !path.exists() {
         return Err(
-            "No .greenbyte file found. Run `greenbyte create <name>` or `greenbyte init` first."
+            "No .envbyte file found. Run `envbyte create <name>` or `envbyte init` first."
                 .to_string(),
         );
     }
     let raw =
-        std::fs::read_to_string(&path).map_err(|e| format!("Could not read .greenbyte: {e}"))?;
+        std::fs::read_to_string(&path).map_err(|e| format!("Could not read .envbyte: {e}"))?;
     let config: ProjectConfig =
-        serde_json::from_str(&raw).map_err(|e| format!("Corrupt .greenbyte file: {e}"))?;
+        serde_json::from_str(&raw).map_err(|e| format!("Corrupt .envbyte file: {e}"))?;
     crate::core::api::client::validate_server_url(&config.server_url)?;
     Ok(config)
 }

@@ -1,4 +1,4 @@
-//! `greenbyte logs` - local snapshots, or the project's server-side history.
+//! `envbyte logs` - local snapshots, or the project's server-side history.
 
 use colored::Colorize;
 
@@ -44,7 +44,7 @@ async fn show_remote() -> Result<(), String> {
 fn show_local(output_file: Option<String>) -> Result<(), String> {
     let store = commit_log::load()?;
     if store.commits.is_empty() {
-        ui::note("No local snapshots yet. Run `greenbyte commit \"message\"`.");
+        ui::note("No local snapshots yet. Run `envbyte commit \"message\"`.");
         return Ok(());
     }
     let mut rendered = String::new();

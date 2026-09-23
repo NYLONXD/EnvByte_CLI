@@ -1,19 +1,19 @@
 [package]
-name = "greenbyte"
-version = "0.3.1"
+name = "envbyte"
+version = "0.4.0"
 edition = "2021"
 description = "Share .env files across a team with end-to-end encryption and rotatable keys"
-authors = ["Greenbyte"]
+authors = ["Envbyte"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/NYLONXD/GreenByte_CLI"
-homepage = "https://github.com/NYLONXD/GreenByte_CLI"
-documentation = "https://docs.rs/greenbyte"
+repository = "https://github.com/NYLONXD/envbyte"
+homepage = "https://github.com/NYLONXD/envbyte"
+documentation = "https://docs.rs/envbyte"
 readme = "README.md"
 rust-version = "1.85"
 keywords = ["dotenv", "secrets", "env", "encryption", "cli"]
 categories = ["command-line-utilities", "cryptography", "development-tools"]
 
-# Lets `cargo binstall greenbyte` find the release archives without downloading
+# Lets `cargo binstall envbyte` find the release archives without downloading
 # and unpacking the crate first.
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }{ archive-suffix }"
@@ -24,7 +24,7 @@ pkg-fmt = "tgz"
 pkg-fmt = "zip"
 
 [[bin]]
-name = "greenbyte"
+name = "envbyte"
 path = "src/main.rs"
 
 [dependencies]

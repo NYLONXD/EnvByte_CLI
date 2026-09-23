@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use greenbyte_server::{app, build_state, config::Config};
+use envbyte_server::{app, build_state, config::Config};
 use sqlx::postgres::PgPoolOptions;
 use tokio::signal;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -19,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bind_addr = config.bind_addr;
     let state = build_state(pool, config)?;
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
-    tracing::info!(%bind_addr, "Greenbyte API listening");
+    tracing::info!(%bind_addr, "Envbyte API listening");
     axum::serve(
         listener,
         app(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
@@ -33,7 +33,7 @@ fn init_tracing() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "greenbyte_server=info,tower_http=info".into()),
+                .unwrap_or_else(|_| "envbyte_server=info,tower_http=info".into()),
         )
         .with(tracing_subscriber::fmt::layer().json())
         .init();

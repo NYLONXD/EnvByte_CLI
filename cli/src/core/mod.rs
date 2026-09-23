@@ -1,8 +1,8 @@
 //! The parts of the CLI that do not touch the terminal.
 //!
 //!   `crypto`    - identity keys, key sealing, the ciphertext envelope
-//!   `api`       - a typed client for the Greenbyte API
-//!   `workspace` - the files Greenbyte keeps on disk
+//!   `api`       - a typed client for the Envbyte API
+//!   `workspace` - the files Envbyte keeps on disk
 //!
 //! Commands compose these; nothing here prints or prompts, so it is all
 //! directly testable.

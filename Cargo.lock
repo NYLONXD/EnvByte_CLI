@@ -599,6 +599,62 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
 
 [[package]]
+name = "envbyte"
+version = "0.4.0"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "base64 0.22.1",
+ "chrono",
+ "clap",
+ "colored",
+ "dirs",
+ "hex",
+ "hkdf",
+ "indicatif",
+ "mac_address",
+ "rand 0.8.6",
+ "reqwest",
+ "rpassword",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "uuid",
+ "x25519-dalek",
+ "zeroize",
+]
+
+[[package]]
+name = "envbyte-server"
+version = "0.4.0"
+dependencies = [
+ "argon2",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "dotenvy",
+ "hex",
+ "http-body-util",
+ "jsonwebtoken",
+ "lettre",
+ "rand 0.8.6",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "zeroize",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -808,62 +864,6 @@ checksum = "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
 dependencies = [
  "opaque-debug",
  "polyval",
-]
-
-[[package]]
-name = "greenbyte"
-version = "0.3.1"
-dependencies = [
- "aes-gcm",
- "argon2",
- "base64 0.22.1",
- "chrono",
- "clap",
- "colored",
- "dirs",
- "hex",
- "hkdf",
- "indicatif",
- "mac_address",
- "rand 0.8.6",
- "reqwest",
- "rpassword",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "uuid",
- "x25519-dalek",
- "zeroize",
-]
-
-[[package]]
-name = "greenbyte-server"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "chrono",
- "dotenvy",
- "hex",
- "http-body-util",
- "jsonwebtoken",
- "lettre",
- "rand 0.8.6",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "thiserror 2.0.18",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "zeroize",
 ]
 
 [[package]]

@@ -17,18 +17,18 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_DB: greenbyte_test
-          POSTGRES_USER: greenbyte
-          POSTGRES_PASSWORD: greenbyte-test-password
+          POSTGRES_DB: envbyte_test
+          POSTGRES_USER: envbyte
+          POSTGRES_PASSWORD: envbyte-test-password
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U greenbyte -d greenbyte_test"
+          --health-cmd "pg_isready -U envbyte -d envbyte_test"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
     env:
-      DATABASE_URL: postgres://greenbyte:greenbyte-test-password@localhost:5432/greenbyte_test
+      DATABASE_URL: postgres://envbyte:envbyte-test-password@localhost:5432/envbyte_test
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

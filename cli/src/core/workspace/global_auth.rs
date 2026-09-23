@@ -1,4 +1,4 @@
-//! `~/.greenbyte-auth` - the account session, shared by every project on this
+//! `~/.envbyte-auth` - the account session, shared by every project on this
 //! machine.
 
 use std::path::PathBuf;
@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::workspace::paths::secure_atomic_write;
 
-const AUTH_FILE: &str = ".greenbyte-auth";
+const AUTH_FILE: &str = ".envbyte-auth";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GlobalAuth {

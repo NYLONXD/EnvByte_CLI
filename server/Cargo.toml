@@ -1,8 +1,8 @@
 [package]
-name = "greenbyte-server"
-version = "0.1.0"
+name = "envbyte-server"
+version = "0.4.0"
 edition = "2021"
-description = "Zero-knowledge coordination and ciphertext storage API for Greenbyte"
+description = "Zero-knowledge coordination and ciphertext storage API for Envbyte"
 publish = false
 
 [dependencies]

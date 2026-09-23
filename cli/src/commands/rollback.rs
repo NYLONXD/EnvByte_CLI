@@ -1,4 +1,4 @@
-//! `greenbyte rollback` - restore a previous state, on the server or locally.
+//! `envbyte rollback` - restore a previous state, on the server or locally.
 
 use colored::Colorize;
 
@@ -45,7 +45,7 @@ async fn remote(commit_id: String) -> Result<(), String> {
     result?;
 
     ui::success(&format!("Rolled back to commit {}.", short.cyan()));
-    ui::note("Run `greenbyte pull` to sync your local .env.");
+    ui::note("Run `envbyte pull` to sync your local .env.");
     Ok(())
 }
 

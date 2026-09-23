@@ -16,9 +16,9 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::core::workspace::paths::secure_atomic_write;
 
-const IDENTITY_FILE: &str = ".greenbyte-identity";
+const IDENTITY_FILE: &str = ".envbyte-identity";
 /// Lets CI supply the key without a file on disk.
-const IDENTITY_ENV: &str = "GREENBYTE_IDENTITY_KEY";
+const IDENTITY_ENV: &str = "ENVBYTE_IDENTITY_KEY";
 
 #[derive(Serialize, Deserialize)]
 struct StoredIdentity {
@@ -77,8 +77,15 @@ pub fn fingerprint_of(public_key_base64: &str) -> Result<String, String> {
         .join("-"))
 }
 
+const IDENTITY_FILE_ENV: &str = "ENVBYTE_IDENTITY_FILE";
+
+/// Whether the identity lives somewhere other than the default location.
+pub fn has_custom_path() -> bool {
+    std::env::var_os(IDENTITY_FILE_ENV).is_some()
+}
+
 pub fn identity_path() -> PathBuf {
-    if let Ok(custom) = std::env::var("GREENBYTE_IDENTITY_FILE") {
+    if let Ok(custom) = std::env::var(IDENTITY_FILE_ENV) {
         return PathBuf::from(custom);
     }
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));

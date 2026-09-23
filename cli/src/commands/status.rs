@@ -1,4 +1,4 @@
-//! `greenbyte status` - what this directory is linked to and whether it works.
+//! `envbyte status` - what this directory is linked to and whether it works.
 
 use colored::Colorize;
 
@@ -30,7 +30,7 @@ pub async fn show() -> Result<(), String> {
     let Some(config) = config else {
         println!();
         ui::warn("No project linked in this directory.");
-        ui::note("Run `greenbyte create <name>` or `greenbyte init`.");
+        ui::note("Run `envbyte create <name>` or `envbyte init`.");
         return Ok(());
     };
 
@@ -56,7 +56,7 @@ async fn report_account(server: &str) -> Option<Session> {
     let Ok(token) = access_token(server, None).await else {
         ui::field(
             "Account",
-            &"not signed in (run `greenbyte login`)".red().to_string(),
+            &"not signed in (run `envbyte login`)".red().to_string(),
         );
         return None;
     };
@@ -71,7 +71,7 @@ async fn report_account(server: &str) -> Option<Session> {
                 &format!("{} <{}>", profile.username.cyan(), profile.email),
             );
             if profile.public_key.is_none() {
-                ui::warn("No identity key published. Run `greenbyte identity publish`.");
+                ui::warn("No identity key published. Run `envbyte identity publish`.");
             }
             Some(session)
         }
@@ -91,7 +91,7 @@ fn report_identity() {
         Ok((identity, created)) => {
             ui::field("Identity", &identity.fingerprint());
             if created {
-                ui::note("Created just now; publish it with `greenbyte identity publish`.");
+                ui::note("Created just now; publish it with `envbyte identity publish`.");
             }
         }
         Err(error) => ui::warn(&format!("Identity key unavailable: {error}")),
@@ -157,7 +157,7 @@ fn report_env_file() {
     } else {
         ui::field(
             ".env",
-            &"not found (run `greenbyte pull`)".yellow().to_string(),
+            &"not found (run `envbyte pull`)".yellow().to_string(),
         );
     }
 }

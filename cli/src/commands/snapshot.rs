@@ -1,4 +1,4 @@
-//! `greenbyte commit` - an encrypted local snapshot, the offline half of
+//! `envbyte commit` - an encrypted local snapshot, the offline half of
 //! history.
 
 use uuid::Uuid;
@@ -40,7 +40,7 @@ pub async fn commit(message: String) -> Result<(), String> {
     ui::field("ID", &id);
     ui::field("Message", message.trim());
     ui::note(&format!(
-        "Restore it with `greenbyte rollback --local {}`.",
+        "Restore it with `envbyte rollback --local {}`.",
         &id[..8]
     ));
     Ok(())

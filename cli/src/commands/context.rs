@@ -112,7 +112,7 @@ pub async fn access_token(server: &str, fallback: Option<String>) -> Result<Stri
     }
     auth.auth_token
         .or(fallback)
-        .ok_or_else(|| "Not logged in. Run `greenbyte login` first.".to_string())
+        .ok_or_else(|| "Not logged in. Run `envbyte login` first.".to_string())
 }
 
 /// Treats a token as expired two minutes early, so a long operation does not

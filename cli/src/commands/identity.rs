@@ -1,4 +1,4 @@
-//! `greenbyte identity` - inspect, export or replace this device's key.
+//! `envbyte identity` - inspect, export or replace this device's key.
 //!
 //! The identity key is what project keys are sealed to. It never leaves the
 //! device unless the user deliberately exports it.
@@ -33,11 +33,11 @@ pub async fn show() -> Result<(), String> {
                 }
                 Some(_) => {
                     ui::warn("The server has a different key for your account.");
-                    ui::note("Run `greenbyte identity publish` to replace it.");
+                    ui::note("Run `envbyte identity publish` to replace it.");
                 }
                 None => {
                     ui::warn("No key published for your account yet.");
-                    ui::note("Run `greenbyte identity publish`.");
+                    ui::note("Run `envbyte identity publish`.");
                 }
             },
             Err(error) => ui::warn(&format!("Could not check the published key: {error}")),
@@ -67,7 +67,7 @@ pub async fn export() -> Result<(), String> {
     println!();
     println!("  {}", secret.as_str().cyan());
     println!();
-    ui::note("Set it as GREENBYTE_IDENTITY_KEY on the other machine or in CI.");
+    ui::note("Set it as ENVBYTE_IDENTITY_KEY on the other machine or in CI.");
     Ok(())
 }
 

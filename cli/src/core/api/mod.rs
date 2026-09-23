@@ -1,4 +1,4 @@
-//! A typed client for the Greenbyte API.
+//! A typed client for the Envbyte API.
 //!
 //! Commands call these functions instead of building URLs and JSON by hand, so
 //! a change to the wire format is a change in one place, and every request

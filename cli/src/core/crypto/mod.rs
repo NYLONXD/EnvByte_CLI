@@ -58,12 +58,12 @@ pub fn open_payload(
 /// Reads a pre-wrapping master key, for opening snapshots written before
 /// per-member key wrapping existed.
 fn read_master_key() -> Result<Zeroizing<String>, String> {
-    let key = match std::env::var("GREENBYTE_MASTER_KEY") {
+    let key = match std::env::var("ENVBYTE_MASTER_KEY") {
         Ok(key) => key,
         Err(std::env::VarError::NotPresent) => {
             rpassword::prompt_password("Legacy master key: ").map_err(|e| e.to_string())?
         }
-        Err(e) => return Err(format!("Could not read GREENBYTE_MASTER_KEY: {e}")),
+        Err(e) => return Err(format!("Could not read ENVBYTE_MASTER_KEY: {e}")),
     };
     if key.is_empty() {
         return Err("Master key cannot be empty.".to_string());

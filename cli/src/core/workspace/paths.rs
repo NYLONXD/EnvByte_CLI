@@ -20,7 +20,7 @@ pub fn secure_atomic_write(path: &Path, contents: &[u8]) -> Result<(), String> {
     let filename = path
         .file_name()
         .and_then(|name| name.to_str())
-        .unwrap_or("greenbyte");
+        .unwrap_or("envbyte");
     let temporary = parent.join(format!(".{filename}.{}.tmp", uuid::Uuid::new_v4()));
     let result = write_temporary(&temporary, contents)
         .and_then(|_| fs::rename(&temporary, path).map_err(|e| e.to_string()));
@@ -53,8 +53,7 @@ mod tests {
 
     #[test]
     fn replaces_content_and_restricts_permissions() {
-        let directory =
-            std::env::temp_dir().join(format!("greenbyte-test-{}", uuid::Uuid::new_v4()));
+        let directory = std::env::temp_dir().join(format!("envbyte-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&directory).unwrap();
         let path = directory.join("secret");
         secure_atomic_write(&path, b"first").unwrap();
@@ -73,8 +72,7 @@ mod tests {
 
     #[test]
     fn leaves_no_temporary_files_behind() {
-        let directory =
-            std::env::temp_dir().join(format!("greenbyte-test-{}", uuid::Uuid::new_v4()));
+        let directory = std::env::temp_dir().join(format!("envbyte-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&directory).unwrap();
         secure_atomic_write(&directory.join("secret"), b"value").unwrap();
         let entries: Vec<_> = fs::read_dir(&directory)

@@ -1,4 +1,4 @@
-//! `greenbyte register`, `verify`, `login`, `logout` and `reset-password`.
+//! `envbyte register`, `verify`, `login`, `logout` and `reset-password`.
 
 use colored::Colorize;
 use zeroize::Zeroizing;
@@ -17,7 +17,7 @@ use crate::{
 };
 
 pub async fn register() -> Result<(), String> {
-    println!("{}", "Create your Greenbyte account".bold());
+    println!("{}", "Create your Envbyte account".bold());
     println!();
 
     let email = ui::prompt("Email: ")?;
@@ -47,8 +47,8 @@ pub async fn register() -> Result<(), String> {
     let signup = signup.map_err(|error| {
         if error.contains("(409") {
             format!(
-                "{error}
-That email or username is taken. If it is yours and was never                  verified, run `greenbyte verify` to get a new token."
+                "{error}\nThat email or username is taken. If it is yours and was never \
+                 verified, run `envbyte verify` to get a new token."
             )
         } else {
             error
@@ -72,7 +72,7 @@ That email or username is taken. If it is yours and was never                  v
 /// Sends a fresh verification token, for when the first one was lost or
 /// expired, then finishes signing up.
 pub async fn verify() -> Result<(), String> {
-    println!("{}", "Verify your Greenbyte email".bold());
+    println!("{}", "Verify your Envbyte email".bold());
     println!();
 
     let email = ui::prompt("Email: ")?;
@@ -112,7 +112,7 @@ async fn complete_verification(server: &str, email: &str) -> Result<(), String> 
 }
 
 pub async fn login() -> Result<(), String> {
-    println!("{}", "Sign in to Greenbyte".bold());
+    println!("{}", "Sign in to Envbyte".bold());
     println!();
 
     let email = ui::prompt("Email: ")?;
@@ -133,8 +133,8 @@ pub async fn login() -> Result<(), String> {
     let auth = auth.map_err(|error| {
         if error.contains("(401") {
             format!(
-                "{error}
-Check the email and password. If you never verified this                  account, run `greenbyte verify`."
+                "{error}\nCheck the email and password. If you never verified this \
+                 account, run `envbyte verify`."
             )
         } else {
             error
@@ -188,7 +188,7 @@ pub async fn reset_password() -> Result<(), String> {
     global_auth::clear()?;
 
     ui::success("Password changed.");
-    ui::note("Run `greenbyte login`. Your identity key and project access are unaffected.");
+    ui::note("Run `envbyte login`. Your identity key and project access are unaffected.");
     Ok(())
 }
 
@@ -207,7 +207,7 @@ pub async fn whoami() -> Result<(), String> {
             "Identity",
             &crate::core::crypto::identity::fingerprint_of(key)?,
         ),
-        None => ui::warn("No identity key published. Run `greenbyte login` to publish one."),
+        None => ui::warn("No identity key published. Run `envbyte login` to publish one."),
     }
     Ok(())
 }

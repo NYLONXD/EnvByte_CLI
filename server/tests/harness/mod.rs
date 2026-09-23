@@ -14,7 +14,7 @@ use axum::{
     Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use greenbyte_server::{
+use envbyte_server::{
     app,
     config::{Config, EmailConfig},
     infra::{email::EmailSender, rate_limit::RateLimiter},
@@ -197,7 +197,7 @@ pub fn test_config() -> Config {
         bind_addr: "127.0.0.1:0".parse().unwrap(),
         database_url: "unused".to_string(),
         jwt_secret: "test-secret-that-is-at-least-thirty-two-characters".to_string(),
-        jwt_issuer: "greenbyte-test".to_string(),
+        jwt_issuer: "envbyte-test".to_string(),
         access_token_ttl_seconds: 3600,
         refresh_token_ttl_days: 30,
         invite_ttl_hours: 24,

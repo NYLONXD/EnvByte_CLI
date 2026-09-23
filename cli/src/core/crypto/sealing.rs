@@ -23,6 +23,8 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::core::crypto::{identity::Identity, DataKey, DATA_KEY_LEN};
 
+// Named before the rename to Envbyte and deliberately kept: WRAP_INFO feeds
+// HKDF, so changing it would make every sealed project key unopenable.
 const WRAP_PREFIX: &str = "greenbyte:wrap:v1:";
 const WRAP_INFO: &[u8] = b"greenbyte:key-wrap:v1";
 const NONCE_LEN: usize = 12;

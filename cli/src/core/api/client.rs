@@ -45,12 +45,12 @@ impl Session {
     }
 }
 
-/// Hosted Greenbyte API, used when `GREENBYTE_SERVER` is not set.
-pub const DEFAULT_SERVER: &str = "https://greenbyte-cli.onrender.com";
+/// Hosted Envbyte API, used when `ENVBYTE_SERVER` is not set.
+pub const DEFAULT_SERVER: &str = "https://api.envbyte.trackedge.in";
 
-/// Server address. Override with `GREENBYTE_SERVER`.
+/// Server address. Override with `ENVBYTE_SERVER`.
 pub fn server_url() -> String {
-    std::env::var("GREENBYTE_SERVER")
+    std::env::var("ENVBYTE_SERVER")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| DEFAULT_SERVER.to_string())
@@ -62,15 +62,14 @@ pub fn http_client() -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(30))
-        .user_agent(concat!("greenbyte/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("envbyte/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| format!("Could not initialize HTTP client: {e}"))
 }
 
 /// Refuses to send credentials in the clear to anything but a local server.
 pub fn validate_server_url(value: &str) -> Result<(), String> {
-    let url =
-        reqwest::Url::parse(value).map_err(|e| format!("Invalid Greenbyte server URL: {e}"))?;
+    let url = reqwest::Url::parse(value).map_err(|e| format!("Invalid Envbyte server URL: {e}"))?;
     match url.scheme() {
         "https" => Ok(()),
         "http" if matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1")) => Ok(()),
@@ -78,7 +77,7 @@ pub fn validate_server_url(value: &str) -> Result<(), String> {
             Err("Refusing to send credentials over plain HTTP to a remote server.".to_string())
         }
         _ => Err(
-            "Greenbyte server URL must use HTTPS (HTTP is allowed only for localhost).".to_string(),
+            "Envbyte server URL must use HTTPS (HTTP is allowed only for localhost).".to_string(),
         ),
     }
 }
@@ -142,19 +141,16 @@ mod tests {
 
     #[test]
     fn rejects_insecure_remote_server_urls() {
-        assert!(validate_server_url("https://api.greenbyte.dev").is_ok());
+        assert!(validate_server_url("https://api.envbyte.dev").is_ok());
         assert!(validate_server_url("http://localhost:3030").is_ok());
         assert!(validate_server_url("http://127.0.0.1:3030").is_ok());
-        assert!(validate_server_url("http://api.greenbyte.dev").is_err());
+        assert!(validate_server_url("http://api.envbyte.dev").is_err());
         assert!(validate_server_url("file:///tmp/socket").is_err());
     }
 
     #[test]
     fn builds_urls_without_double_slashes() {
-        let session = Session::new("https://api.greenbyte.dev/", "token".to_string()).unwrap();
-        assert_eq!(
-            session.url("/projects"),
-            "https://api.greenbyte.dev/projects"
-        );
+        let session = Session::new("https://api.envbyte.dev/", "token".to_string()).unwrap();
+        assert_eq!(session.url("/projects"), "https://api.envbyte.dev/projects");
     }
 }

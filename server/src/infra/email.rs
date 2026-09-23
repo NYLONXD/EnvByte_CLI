@@ -98,9 +98,9 @@ impl EmailSender for SmtpEmailSender {
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
-            .subject("Verify your Greenbyte email")
+            .subject("Verify your Envbyte email")
             .body(format!(
-                "Enter this one-time token in the Greenbyte CLI to verify your email:\n\n{token}\n\nThis token expires soon and can be used once."
+                "Enter this one-time token in the Envbyte CLI to verify your email:\n\n{token}\n\nThis token expires soon and can be used once."
             ))
             .map_err(|e| format!("Could not build verification email: {e}"))?;
         self.transport
@@ -117,9 +117,9 @@ impl EmailSender for SmtpEmailSender {
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
-            .subject("Reset your Greenbyte password")
+            .subject("Reset your Envbyte password")
             .body(format!(
-                "Enter this one-time token in the Greenbyte CLI to reset your password:\n\n{token}\n\nIf you did not request this, ignore this email."
+                "Enter this one-time token in the Envbyte CLI to reset your password:\n\n{token}\n\nIf you did not request this, ignore this email."
             ))
             .map_err(|e| format!("Could not build password reset email: {e}"))?;
         self.transport
@@ -140,14 +140,14 @@ impl EmailSender for SmtpEmailSender {
             .parse::<Mailbox>()
             .map_err(|e| format!("Invalid invitation recipient: {e}"))?;
         let body = format!(
-            "You were invited to the Greenbyte project '{project}'.\n\n\
-             Install the CLI from {cli_url}, run `greenbyte init {project}`, and enter this one-time token:\n\n\
+            "You were invited to the Envbyte project '{project}'.\n\n\
+             Install the CLI from {cli_url}, run `envbyte init {project}`, and enter this one-time token:\n\n\
              {token}\n\nThis token expires in 24 hours and can be used once. Obtain the project master key through a separate secure channel."
         );
         let message = Message::builder()
             .from(self.from.clone())
             .to(recipient)
-            .subject(format!("Greenbyte invitation to {project}"))
+            .subject(format!("Envbyte invitation to {project}"))
             .body(body)
             .map_err(|e| format!("Could not build invitation email: {e}"))?;
         self.transport

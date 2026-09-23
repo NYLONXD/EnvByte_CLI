@@ -1,6 +1,6 @@
 # Dependency policy, enforced in CI by `cargo deny check`.
 #
-# Greenbyte handles other people's production credentials, so a known-vulnerable
+# Envbyte handles other people's production credentials, so a known-vulnerable
 # or unmaintained dependency is a release blocker rather than a note.
 
 [advisories]

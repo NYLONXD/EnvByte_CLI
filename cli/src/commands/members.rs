@@ -1,4 +1,4 @@
-//! `greenbyte add`, `members`, `remove` and `role`.
+//! `envbyte add`, `members`, `remove` and `role`.
 
 use colored::Colorize;
 
@@ -11,7 +11,7 @@ use crate::{
     ui,
 };
 
-/// `greenbyte add <email>` - invites a collaborator and seals the project key
+/// `envbyte add <email>` - invites a collaborator and seals the project key
 /// to them in the same step.
 ///
 /// This is the whole point of key wrapping: the colleague never has to be sent
@@ -45,7 +45,7 @@ pub async fn add(email: String) -> Result<(), String> {
     ui::note(&format!(
         "Project key v{key_version} is sealed to their identity - nothing to share by hand."
     ));
-    ui::note("They run `greenbyte init` and paste the token from their email.");
+    ui::note("They run `envbyte init` and paste the token from their email.");
     ui::note(&format!(
         "The token expires in {} hours.",
         result.expires_in_hours
@@ -75,7 +75,7 @@ pub async fn list() -> Result<(), String> {
     Ok(())
 }
 
-/// `greenbyte remove <user_id>` - revokes access.
+/// `envbyte remove <user_id>` - revokes access.
 ///
 /// Removal deletes their sealed key on the server, but they may have kept the
 /// one they already opened, so this always points at `rotate`.
@@ -90,7 +90,7 @@ pub async fn remove(user_id: String) -> Result<(), String> {
 
     ui::success("Collaborator removed.");
     ui::warn("They may still hold the current project key.");
-    ui::note("Run `greenbyte rotate` now to retire it and re-encrypt every file.");
+    ui::note("Run `envbyte rotate` now to retire it and re-encrypt every file.");
     Ok(())
 }
 

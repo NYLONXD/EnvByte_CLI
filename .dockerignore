@@ -1,7 +1,7 @@
 target/
 .git/
 .github/
-.greenbyte/
+.envbyte/
 .env
 .env.*
 !.env.example

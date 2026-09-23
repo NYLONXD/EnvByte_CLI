@@ -1,4 +1,4 @@
-//! `greenbyte audit` - the server-side record of who changed what.
+//! `envbyte audit` - the server-side record of who changed what.
 
 use colored::Colorize;
 

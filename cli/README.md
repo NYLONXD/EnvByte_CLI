@@ -1,15 +1,18 @@
-# greenbyte
+# envbyte
 
 End-to-end encrypted `.env` sharing for teams, with rotatable keys.
 
 ```bash
-cargo install greenbyte      # or: cargo binstall greenbyte
+cargo install envbyte      # or: cargo binstall envbyte
 ```
+
+Formerly published as `greenbyte`. The first time `envbyte` runs it copies your
+identity key and moves your sign-in and project links to their new names.
 
 ## Why
 
 Sharing `.env` files usually means pasting secrets into chat, or sharing one
-master passphrase that can never be changed. Greenbyte does neither.
+master passphrase that can never be changed. Envbyte does neither.
 
 Every member has an **identity key** that never leaves their device. Every
 project has a **data key** that encrypts its files, stored as one sealed copy
@@ -21,25 +24,25 @@ it can be **rotated** — which is what makes offboarding actually work.
 ## Getting started
 
 ```bash
-greenbyte register              # creates your identity key on first use
+envbyte register              # creates your identity key on first use
 cd my-app
-greenbyte create my-app         # project key is sealed to you; nothing to copy down
-greenbyte push -m "initial"
+envbyte create my-app         # project key is sealed to you; nothing to copy down
+envbyte push -m "initial"
 ```
 
 Add a colleague — the project key is sealed to them in the same step:
 
 ```bash
-greenbyte add teammate@example.com
+envbyte add teammate@example.com
 ```
 
 They join with the token from their email. No name needed; the invitation
 identifies the project:
 
 ```bash
-greenbyte login
-greenbyte init
-greenbyte pull
+envbyte login
+envbyte init
+envbyte pull
 ```
 
 ## Offboarding
@@ -48,8 +51,8 @@ Removing someone revokes their sessions and deletes their sealed key, but they
 may have kept the key they already opened. Rotating retires it:
 
 ```bash
-greenbyte remove <user-id>
-greenbyte rotate
+envbyte remove <user-id>
+envbyte rotate
 ```
 
 `rotate` mints a new key, re-encrypts every file, and seals it only to the
@@ -59,28 +62,28 @@ that would miss a member or leave a file on the old key.
 ## Commands
 
 ```text
-greenbyte register | verify | login | logout | whoami | reset-password
-greenbyte identity [show | publish | export | replace]
-greenbyte create <project> | init [project] | projects
-greenbyte push [-m <msg>] [-f <file>] | pull [-f <file>] [--force]
-greenbyte commit <msg> | logs [--remote] | rollback --local <id> | --address <id>
-greenbyte add <email> | members | role <id> <role> | remove <id> | rotate [-y]
-greenbyte status | audit
+envbyte register | verify | login | logout | whoami | reset-password
+envbyte identity [show | publish | export | replace]
+envbyte create <project> | init [project] | projects
+envbyte push [-m <msg>] [-f <file>] | pull [-f <file>] [--force]
+envbyte commit <msg> | logs [--remote] | rollback --local <id> | --address <id>
+envbyte add <email> | members | role <id> <role> | remove <id> | rotate [-y]
+envbyte status | audit
 ```
 
 ## Configuration
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GREENBYTE_SERVER` | `https://greenbyte-cli.onrender.com` | API URL; remote servers must use HTTPS |
-| `GREENBYTE_IDENTITY_KEY` | unset | Identity secret for CI, instead of a file |
-| `GREENBYTE_IDENTITY_FILE` | `~/.greenbyte-identity` | Where the identity key is stored |
+| `ENVBYTE_SERVER` | `https://api.envbyte.trackedge.in` | API URL; remote servers must use HTTPS |
+| `ENVBYTE_IDENTITY_KEY` | unset | Identity secret for CI, instead of a file |
+| `ENVBYTE_IDENTITY_FILE` | `~/.envbyte-identity` | Where the identity key is stored |
 
 For CI, give the runner its own account and inject its identity key from the
 secret store:
 
 ```bash
-GREENBYTE_IDENTITY_KEY="$GREENBYTE_CI_IDENTITY" greenbyte pull -f .env.ci --force
+ENVBYTE_IDENTITY_KEY="$ENVBYTE_CI_IDENTITY" envbyte pull -f .env.ci --force
 ```
 
 ## Crypto
@@ -91,7 +94,7 @@ GREENBYTE_IDENTITY_KEY="$GREENBYTE_CI_IDENTITY" greenbyte pull -f .env.ci --forc
 - Identity and data keys are zeroized on drop
 
 The server needs running too — see the
-[repository](https://github.com/NYLONXD/GreenByte_CLI) for the API, its
+[repository](https://github.com/NYLONXD/envbyte) for the API, its
 container image, and `SECURITY.md`.
 
 ## License

@@ -1,4 +1,4 @@
-//! `greenbyte rotate` - retire the project data key and issue a new one.
+//! `envbyte rotate` - retire the project data key and issue a new one.
 //!
 //! This is what makes offboarding real. Removing a member deletes their sealed
 //! copy on the server, but they may have kept the key they already opened;
@@ -46,7 +46,7 @@ pub async fn rotate(assume_yes: bool) -> Result<(), String> {
     if !unreachable.is_empty() {
         return Err(format!(
             "These members have not published an identity key yet, so a new key cannot be sealed \
-             to them: {}. Ask them to run `greenbyte login` with an up-to-date CLI, then rotate.",
+             to them: {}. Ask them to run `envbyte login` with an up-to-date CLI, then rotate.",
             unreachable.join(", ")
         ));
     }
@@ -129,6 +129,6 @@ pub async fn rotate(assume_yes: bool) -> Result<(), String> {
     if result.grants_revoked > 0 {
         ui::field("Stale keys revoked", &result.grants_revoked.to_string());
     }
-    ui::note("Tell the team to run `greenbyte pull` to pick up the new key.");
+    ui::note("Tell the team to run `envbyte pull` to pick up the new key.");
     Ok(())
 }

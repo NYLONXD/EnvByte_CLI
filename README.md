@@ -1,6 +1,11 @@
-# Greenbyte
+# Envbyte
 
-Greenbyte is an end-to-end encrypted `.env` manager for teams. It gives environment files versioned history, rollback, invitations, roles and an audit trail, without any secret ever reaching the server and without anyone having to send a key to anyone.
+Envbyte is an end-to-end encrypted `.env` manager for teams. It gives environment files versioned history, rollback, invitations, roles and an audit trail, without any secret ever reaching the server and without anyone having to send a key to anyone.
+
+Envbyte was previously called **Greenbyte**. If you used it under that name,
+install `envbyte` and run any command: your identity key is copied, and your
+sign-in and project links are moved, to their new names automatically. Then
+uninstall the old binary with `cargo uninstall greenbyte`.
 
 This repository contains the complete application:
 
@@ -22,11 +27,11 @@ sealed once per member, to their identity key, and the sealed copies are what
 the server stores. The server can open none of them.
 
 Nothing secret is ever shared by hand. Inviting a colleague seals the project
-key to them in the same step; they run `greenbyte init` and can read the files.
+key to them in the same step; they run `envbyte init` and can read the files.
 
 Because the project key is stored as per-member copies rather than one shared
 passphrase, it can be **rotated**. Removing someone and running
-`greenbyte rotate` mints a new key, re-encrypts every file under it, and seals
+`envbyte rotate` mints a new key, re-encrypts every file under it, and seals
 it only to the people who remain — so the copy the departing member already had
 opens nothing new.
 
@@ -72,9 +77,9 @@ All commands below are run from the repository root.
 cp .env.example .env
 ```
 
-For local development the example values work, but changing `POSTGRES_PASSWORD` and `GREENBYTE_JWT_SECRET` is recommended. The `.env` file is ignored by Git.
+For local development the example values work, but changing `POSTGRES_PASSWORD` and `ENVBYTE_JWT_SECRET` is recommended. The `.env` file is ignored by Git.
 
-If PostgreSQL was previously started with another password, either keep that original password in `.env` or intentionally recreate the local database volume. Recreating the volume permanently deletes its local Greenbyte data.
+If PostgreSQL was previously started with another password, either keep that original password in `.env` or intentionally recreate the local database volume. Recreating the volume permanently deletes its local Envbyte data.
 
 ### 2. Start PostgreSQL and the API
 
@@ -103,37 +108,37 @@ docker compose logs -f api
 Run it directly during development:
 
 ```bash
-cargo run -p greenbyte -- --help
+cargo run -p envbyte -- --help
 ```
 
-Or install the `greenbyte` command. Any of these work:
+Or install the `envbyte` command. Any of these work:
 
 ```bash
-cargo install greenbyte              # from crates.io
-cargo binstall greenbyte             # prebuilt binary, no compile
+cargo install envbyte              # from crates.io
+cargo binstall envbyte             # prebuilt binary, no compile
 cargo install --path cli --locked    # from this checkout
 ```
 
 Prebuilt binaries for Linux (gnu and musl, x86_64 and aarch64), macOS (Intel
 and Apple Silicon) and Windows are attached to every
-[GitHub release](https://github.com/NYLONXD/GreenByte_CLI/releases), each with a
+[GitHub release](https://github.com/NYLONXD/envbyte/releases), each with a
 `.sha256` file to verify against.
 
-The CLI talks to the hosted server at `https://greenbyte-cli.onrender.com` by
+The CLI talks to the hosted server at `https://api.envbyte.trackedge.in` by
 default, so a fresh install needs no configuration. To use the local API
 started above instead, point it at localhost:
 
 ```bash
-export GREENBYTE_SERVER=http://localhost:3030
+export ENVBYTE_SERVER=http://localhost:3030
 ```
 
 ### 4. Register an account
 
 ```bash
-greenbyte register
+envbyte register
 ```
 
-Local development uses `GREENBYTE_EMAIL_MODE=log`, so verification, reset, and invitation tokens are printed to the API logs instead of being emailed:
+Local development uses `ENVBYTE_EMAIL_MODE=log`, so verification, reset, and invitation tokens are printed to the API logs instead of being emailed:
 
 ```bash
 docker compose logs api
@@ -141,48 +146,48 @@ docker compose logs api
 
 Copy the requested token from the logs and paste it into the CLI prompt. Production mode rejects log-based email delivery and requires SMTP.
 
-If the token is lost or expires before you use it, run `greenbyte verify`. It
+If the token is lost or expires before you use it, run `envbyte verify`. It
 asks for the email and password you registered with, sends a new token, and
 finishes signing you in. An unverified registration whose token expired no
 longer holds its email or username, so registering again also works.
 
-If the CLI was not installed, replace `greenbyte` in any example with:
+If the CLI was not installed, replace `envbyte` in any example with:
 
 ```bash
-cargo run -p greenbyte --
+cargo run -p envbyte --
 ```
 
-For example, `greenbyte status` becomes `cargo run -p greenbyte -- status`.
+For example, `envbyte status` becomes `cargo run -p envbyte -- status`.
 
 ### 5. Create and synchronize a project
 
 Run these commands inside the application directory containing your `.env` file:
 
 ```bash
-greenbyte create my-application
-greenbyte status
-greenbyte push --file .env --message "initial configuration"
-greenbyte logs --remote
+envbyte create my-application
+envbyte status
+envbyte push --file .env --message "initial configuration"
+envbyte logs --remote
 ```
 
-`greenbyte create` mints the project key and seals it to your identity. There is
+`envbyte create` mints the project key and seals it to your identity. There is
 nothing to write down and nothing to store in a password manager — the sealed
 copy lives on the server and only your device can open it.
 
-Your identity key is created on first use at `~/.greenbyte-identity`. Treat it
+Your identity key is created on first use at `~/.envbyte-identity`. Treat it
 like an SSH private key. If you lose it, an admin can grant you access again; if
 it leaks, rotate the project key.
 
 Pull the current encrypted version back to disk:
 
 ```bash
-greenbyte pull --file .env
+envbyte pull --file .env
 ```
 
-Greenbyte asks before replacing an existing file. Use `--force` only for intentional non-interactive replacement:
+Envbyte asks before replacing an existing file. Use `--force` only for intentional non-interactive replacement:
 
 ```bash
-greenbyte pull --file .env --force
+envbyte pull --file .env --force
 ```
 
 ### 6. Invite a teammate
@@ -190,34 +195,34 @@ greenbyte pull --file .env --force
 The project owner runs:
 
 ```bash
-greenbyte add teammate@example.com
-greenbyte members
+envbyte add teammate@example.com
+envbyte members
 ```
 
 The teammate retrieves the invitation token from their email, or from API logs in local mode, then signs in and joins:
 
 ```bash
-greenbyte register   # or `greenbyte login` for an existing account
-greenbyte init
+envbyte register   # or `envbyte login` for an existing account
+envbyte init
 ```
 
-`greenbyte init` takes no project name: the invitation identifies the project.
+`envbyte init` takes no project name: the invitation identifies the project.
 
 Joining is performed as the signed-in account, and the server accepts the token only from the account it was issued to. An invitation is therefore not a credential: forwarding the email to somebody else gives them nothing, and the response contains no login tokens.
 
 The project key was sealed to the teammate's identity when they were invited, so
-they can `greenbyte pull` immediately. Nothing is sent out of band.
+they can `envbyte pull` immediately. Nothing is sent out of band.
 
-If `greenbyte add` reports that the account has no identity key, they have not
-signed in with a current CLI yet. One `greenbyte login` publishes it.
+If `envbyte add` reports that the account has no identity key, they have not
+signed in with a current CLI yet. One `envbyte login` publishes it.
 
 Manage roles and membership with:
 
 ```bash
-greenbyte members
-greenbyte role <user-id> <admin|member|viewer>
-greenbyte remove <user-id>
-greenbyte audit
+envbyte members
+envbyte role <user-id> <admin|member|viewer>
+envbyte remove <user-id>
+envbyte audit
 ```
 
 ### 7. Offboard someone
@@ -227,11 +232,11 @@ sessions, but they may have kept the key they already opened. Rotating is what
 makes that copy worthless:
 
 ```bash
-greenbyte remove <user-id>
-greenbyte rotate
+envbyte remove <user-id>
+envbyte rotate
 ```
 
-`greenbyte rotate` shows exactly what will happen before asking to proceed: the
+`envbyte rotate` shows exactly what will happen before asking to proceed: the
 version it moves to, who receives the new key, and how many files will be
 re-encrypted. It refuses to start if any remaining member has no identity key to
 seal to, rather than silently locking them out.
@@ -241,52 +246,52 @@ every current member and every stored file — a half-applied rotation is worse
 than none. Afterwards, a client still holding the retired key gets a clear error
 on push instead of overwriting a file the team can no longer read.
 
-Everyone else runs `greenbyte pull` to pick up the new key. Project history
+Everyone else runs `envbyte pull` to pick up the new key. Project history
 stays readable: members keep their older key versions for reading the past.
 
-Use `greenbyte rotate -y` to skip the prompt in a script.
+Use `envbyte rotate -y` to skip the prompt in a script.
 
 ## CLI command reference
 
 ```text
 Account
-  greenbyte register                        create an account
-  greenbyte verify                          resend the verification token and finish signing up
-  greenbyte login                           sign in (also publishes your identity key)
-  greenbyte logout                          sign out on this machine
-  greenbyte whoami                          show the signed-in account
-  greenbyte reset-password                  request a token and set a new password
+  envbyte register                        create an account
+  envbyte verify                          resend the verification token and finish signing up
+  envbyte login                           sign in (also publishes your identity key)
+  envbyte logout                          sign out on this machine
+  envbyte whoami                          show the signed-in account
+  envbyte reset-password                  request a token and set a new password
 
 Identity
-  greenbyte identity                        show this device's key and whether it is published
-  greenbyte identity publish                publish this device's public key
-  greenbyte identity export                 print the secret key, for another machine or CI
-  greenbyte identity replace                replace this device's key (needs re-granting)
+  envbyte identity                        show this device's key and whether it is published
+  envbyte identity publish                publish this device's public key
+  envbyte identity export                 print the secret key, for another machine or CI
+  envbyte identity replace                replace this device's key (needs re-granting)
 
 Projects
-  greenbyte create <project>                start a project here
-  greenbyte init [project]                  join a project you were invited to
-  greenbyte projects                        list projects you can reach
+  envbyte create <project>                start a project here
+  envbyte init [project]                  join a project you were invited to
+  envbyte projects                        list projects you can reach
 
 Syncing
-  greenbyte push [-m <message>] [-f <file>] encrypt and upload a .env file
-  greenbyte pull [-f <file>] [--force]      download and decrypt
-  greenbyte commit <message>                take an encrypted local snapshot
-  greenbyte logs [--file <output>]          list local snapshots
-  greenbyte logs --remote                   show the project's server-side history
-  greenbyte rollback --local <id>           restore from a local snapshot
-  greenbyte rollback --address <commit>     roll the server back to a commit
+  envbyte push [-m <message>] [-f <file>] encrypt and upload a .env file
+  envbyte pull [-f <file>] [--force]      download and decrypt
+  envbyte commit <message>                take an encrypted local snapshot
+  envbyte logs [--file <output>]          list local snapshots
+  envbyte logs --remote                   show the project's server-side history
+  envbyte rollback --local <id>           restore from a local snapshot
+  envbyte rollback --address <commit>     roll the server back to a commit
 
 Collaboration
-  greenbyte add <email>                     invite, sealing the project key to them
-  greenbyte members                         list members, roles and key versions held
-  greenbyte role <user-id> <role>           set admin, member or viewer
-  greenbyte remove <user-id>                revoke access
-  greenbyte rotate [-y]                     retire the project key and issue a new one
+  envbyte add <email>                     invite, sealing the project key to them
+  envbyte members                         list members, roles and key versions held
+  envbyte role <user-id> <role>           set admin, member or viewer
+  envbyte remove <user-id>                revoke access
+  envbyte rotate [-y]                     retire the project key and issue a new one
 
 Inspection
-  greenbyte status                          what this directory is linked to
-  greenbyte audit                           the project's security audit log
+  envbyte status                          what this directory is linked to
+  envbyte audit                           the project's security audit log
 ```
 
 ## Architecture
@@ -327,13 +332,13 @@ reference.
 
 | Path | Purpose | Protection |
 |---|---|---|
-| `.greenbyte` | Linked project identity and scoped tokens | Atomic write; mode `0600` on Unix |
-| `.greenbyte-logs` | Encrypted local snapshots | Atomic write; mode `0600` on Unix |
-| `~/.greenbyte-auth` | Global login session | Atomic write; mode `0600` on Unix |
-| `~/.greenbyte-identity` | This device's identity key | Atomic write; mode `0600` on Unix |
+| `.envbyte` | Linked project identity and scoped tokens | Atomic write; mode `0600` on Unix |
+| `.envbyte-logs` | Encrypted local snapshots | Atomic write; mode `0600` on Unix |
+| `~/.envbyte-auth` | Global login session | Atomic write; mode `0600` on Unix |
+| `~/.envbyte-identity` | This device's identity key | Atomic write; mode `0600` on Unix |
 | `.env*` | Decrypted environment files | Atomic write; mode `0600` on Unix |
 
-Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*` to the application directory's `.gitignore`.
+Project initialization adds `.envbyte`, `.envbyte-logs`, `.env`, and `.env.*` to the application directory's `.gitignore`.
 
 ## Configuration
 
@@ -341,16 +346,16 @@ Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*
 
 | Variable | Default | Description |
 |---|---|---|
-| `GREENBYTE_SERVER` | `https://greenbyte-cli.onrender.com` | API URL; non-local servers must use HTTPS |
-| `GREENBYTE_IDENTITY_KEY` | unset | Identity secret key for CI, instead of a file on disk |
-| `GREENBYTE_IDENTITY_FILE` | `~/.greenbyte-identity` | Where the identity key is stored |
-| `GREENBYTE_MASTER_KEY` | unset | Only for reading snapshots written before key wrapping |
+| `ENVBYTE_SERVER` | `https://api.envbyte.trackedge.in` | API URL; non-local servers must use HTTPS |
+| `ENVBYTE_IDENTITY_KEY` | unset | Identity secret key for CI, instead of a file on disk |
+| `ENVBYTE_IDENTITY_FILE` | `~/.envbyte-identity` | Where the identity key is stored |
+| `ENVBYTE_MASTER_KEY` | unset | Only for reading snapshots written before key wrapping |
 
 ### API behind a reverse proxy
 
 The API rate-limits by client IP. Behind a proxy or load balancer (Render,
 Fly, Heroku, nginx), every connection arrives from the proxy, so all users
-would share one limit. Set `GREENBYTE_TRUSTED_PROXY_HOPS` to the number of
+would share one limit. Set `ENVBYTE_TRUSTED_PROXY_HOPS` to the number of
 proxies in front of the API — `1` for Render — and the client address is read
 from `X-Forwarded-For` instead. Leave it at the default `0` when clients
 connect directly, because the header is then client-controlled.
@@ -364,19 +369,19 @@ For CI, give the runner its own account and inject that account's identity key
 from the secret store:
 
 ```bash
-GREENBYTE_IDENTITY_KEY="$GREENBYTE_CI_IDENTITY" greenbyte pull --file .env.ci --force
+ENVBYTE_IDENTITY_KEY="$ENVBYTE_CI_IDENTITY" envbyte pull --file .env.ci --force
 ```
 
-Generate it once with `greenbyte identity export` on a machine signed in as the
+Generate it once with `envbyte identity export` on a machine signed in as the
 CI account. Because CI is a member like any other, revoking it is
-`greenbyte remove` followed by `greenbyte rotate` — the same as for a person.
+`envbyte remove` followed by `envbyte rotate` — the same as for a person.
 
 Do not put the key directly into a script, shell history, repository file or CI
 log.
 
 ### Backend
 
-The local Compose stack reads `POSTGRES_PASSWORD`, `GREENBYTE_JWT_SECRET`, `GREENBYTE_EMAIL_MODE`, and `RUST_LOG` from `.env`. All backend settings, including SMTP and token lifetimes, are documented in [`server/README.md`](server/README.md).
+The local Compose stack reads `POSTGRES_PASSWORD`, `ENVBYTE_JWT_SECRET`, `ENVBYTE_EMAIL_MODE`, and `RUST_LOG` from `.env`. All backend settings, including SMTP and token lifetimes, are documented in [`server/README.md`](server/README.md).
 
 ## Tests and quality checks
 
@@ -387,7 +392,7 @@ docker compose up -d postgres
 set -a
 source ./.env
 set +a
-DATABASE_URL="postgres://greenbyte:${POSTGRES_PASSWORD}@localhost:5432/greenbyte" \
+DATABASE_URL="postgres://envbyte:${POSTGRES_PASSWORD}@localhost:5432/envbyte" \
   cargo test --workspace --locked
 ```
 
@@ -448,11 +453,11 @@ Unused build cache can be removed with `docker builder prune`, but review what D
 
 ## Production deployment
 
-Before exposing Greenbyte publicly:
+Before exposing Envbyte publicly:
 
 - Use HTTPS through a trusted reverse proxy or load balancer.
-- Set `GREENBYTE_ENV=production`.
-- Configure `GREENBYTE_EMAIL_MODE=smtp` and real SMTP credentials.
+- Set `ENVBYTE_ENV=production`.
+- Configure `ENVBYTE_EMAIL_MODE=smtp` and real SMTP credentials.
 - Generate strong, unique database and JWT secrets and inject them from a secret manager.
 - Use a restricted production PostgreSQL role and tested encrypted backups.
 - Add edge-level distributed rate limiting for multiple API replicas.

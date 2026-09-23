@@ -7,7 +7,7 @@
 use colored::Colorize;
 
 pub fn banner() {
-    println!("{}", "Greenbyte".green().bold());
+    println!("{}", "Envbyte".green().bold());
 }
 
 pub fn prompt(label: &str) -> Result<String, String> {

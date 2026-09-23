@@ -1,4 +1,4 @@
-//! `greenbyte push` and `greenbyte pull`.
+//! `envbyte push` and `envbyte pull`.
 
 use std::path::PathBuf;
 
@@ -99,7 +99,7 @@ pub async fn pull(requested_file: Option<String>, force: bool) -> Result<(), Str
 
     if files.is_empty() {
         ui::warn("No environment files stored for this project yet.");
-        ui::note("Run `greenbyte push -m \"initial\"` to upload one.");
+        ui::note("Run `envbyte push -m \"initial\"` to upload one.");
         return Ok(());
     }
 

@@ -9,10 +9,10 @@ use crate::commands;
 
 #[derive(Parser)]
 #[command(
-    name = "greenbyte",
+    name = "envbyte",
     about = "Team .env manager - encrypted, versioned, collaborative",
     version,
-    long_about = "Greenbyte shares .env files across a team without anyone sending a secret to \
+    long_about = "Envbyte shares .env files across a team without anyone sending a secret to \
                   anyone. Each member holds an identity key; the project key is sealed to it."
 )]
 pub struct Cli {
@@ -186,7 +186,7 @@ mod tests {
     #[test]
     fn parses_non_interactive_push_options() {
         let cli = Cli::try_parse_from([
-            "greenbyte",
+            "envbyte",
             "push",
             "--file",
             ".env.ci",
@@ -205,8 +205,7 @@ mod tests {
 
     #[test]
     fn parses_the_safe_pull_overwrite_flag() {
-        let cli =
-            Cli::try_parse_from(["greenbyte", "pull", "--file", ".env.ci", "--force"]).unwrap();
+        let cli = Cli::try_parse_from(["envbyte", "pull", "--file", ".env.ci", "--force"]).unwrap();
         match cli.command {
             Commands::Pull { file, force } => {
                 assert_eq!(file.as_deref(), Some(".env.ci"));
@@ -218,9 +217,9 @@ mod tests {
 
     #[test]
     fn rotation_can_be_scripted() {
-        let cli = Cli::try_parse_from(["greenbyte", "rotate", "-y"]).unwrap();
+        let cli = Cli::try_parse_from(["envbyte", "rotate", "-y"]).unwrap();
         assert!(matches!(cli.command, Commands::Rotate { yes: true }));
-        let cli = Cli::try_parse_from(["greenbyte", "rotate"]).unwrap();
+        let cli = Cli::try_parse_from(["envbyte", "rotate"]).unwrap();
         assert!(matches!(cli.command, Commands::Rotate { yes: false }));
     }
 
@@ -228,13 +227,13 @@ mod tests {
     fn init_no_longer_requires_a_project_name() {
         // The invitation identifies the project, so the name is optional and
         // never has to be guessed.
-        let cli = Cli::try_parse_from(["greenbyte", "init"]).unwrap();
+        let cli = Cli::try_parse_from(["envbyte", "init"]).unwrap();
         assert!(matches!(cli.command, Commands::Init { project_name: None }));
     }
 
     #[test]
     fn identity_defaults_to_showing() {
-        let cli = Cli::try_parse_from(["greenbyte", "identity"]).unwrap();
+        let cli = Cli::try_parse_from(["envbyte", "identity"]).unwrap();
         assert!(matches!(cli.command, Commands::Identity { action: None }));
     }
 }

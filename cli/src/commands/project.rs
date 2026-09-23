@@ -1,4 +1,4 @@
-//! `greenbyte create` and `greenbyte init`.
+//! `envbyte create` and `envbyte init`.
 
 use colored::Colorize;
 
@@ -13,7 +13,7 @@ use crate::{
     ui,
 };
 
-/// `greenbyte create <name>` - starts a new project in this directory.
+/// `envbyte create <name>` - starts a new project in this directory.
 ///
 /// The project data key is minted here and sealed to the creator's own
 /// identity. Nothing is printed for the user to write down, because nothing
@@ -22,7 +22,7 @@ pub async fn create(project_name: String) -> Result<(), String> {
     validate_project_name(&project_name)?;
     if project_config::exists() {
         return Err(
-            "A .greenbyte file already exists here. Use `greenbyte init` to link an existing \
+            "A .envbyte file already exists here. Use `envbyte init` to link an existing \
              project."
                 .to_string(),
         );
@@ -56,12 +56,12 @@ pub async fn create(project_name: String) -> Result<(), String> {
         "The project key is sealed to your identity ({}). There is nothing to copy down.",
         identity.fingerprint()
     ));
-    ui::note("Add a collaborator with `greenbyte add <email>` - they get their own sealed copy.");
+    ui::note("Add a collaborator with `envbyte add <email>` - they get their own sealed copy.");
     add_to_gitignore()?;
     Ok(())
 }
 
-/// `greenbyte init` - joins a project you were invited to.
+/// `envbyte init` - joins a project you were invited to.
 ///
 /// The invitation identifies the project, so no name is needed and none can be
 /// guessed. The project key arrives already sealed to this account.
@@ -70,7 +70,7 @@ pub async fn init(expected_name: Option<String>) -> Result<(), String> {
         validate_project_name(name)?;
     }
     if project_config::exists() {
-        return Err("Already initialized. A .greenbyte file exists here.".to_string());
+        return Err("Already initialized. A .envbyte file exists here.".to_string());
     }
 
     // Joining happens as the signed-in account: an invitation proves you were
@@ -119,18 +119,18 @@ pub async fn init(expected_name: Option<String>) -> Result<(), String> {
         "The project key was sealed to your identity ({}).",
         identity.fingerprint()
     ));
-    ui::note("Run `greenbyte pull` to get the current .env.");
+    ui::note("Run `envbyte pull` to get the current .env.");
     add_to_gitignore()?;
     Ok(())
 }
 
-/// Keeps Greenbyte's own files, and every `.env`, out of version control.
-fn add_to_gitignore() -> Result<(), String> {
+/// Keeps Envbyte's own files, and every `.env`, out of version control.
+pub fn add_to_gitignore() -> Result<(), String> {
     let gitignore = std::path::Path::new(".gitignore");
     let mut existing = std::fs::read_to_string(gitignore).unwrap_or_default();
     let required = [
-        ".greenbyte",
-        ".greenbyte-logs",
+        ".envbyte",
+        ".envbyte-logs",
         ".env",
         ".env.*",
         "!.env.example",
@@ -149,7 +149,7 @@ fn add_to_gitignore() -> Result<(), String> {
     if changed {
         std::fs::write(gitignore, existing)
             .map_err(|e| format!("Could not update .gitignore: {e}"))?;
-        ui::step("Added Greenbyte's files to .gitignore");
+        ui::step("Added Envbyte's files to .gitignore");
     }
     Ok(())
 }
@@ -168,7 +168,7 @@ pub fn validate_project_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `greenbyte projects` - every project this account can reach.
+/// `envbyte projects` - every project this account can reach.
 ///
 /// Names are shown as `owner/project`, because two accounts may each own one
 /// called `backend`.
@@ -187,7 +187,7 @@ pub async fn list() -> Result<(), String> {
     };
     let projects = projects::list(&session).await?;
     if projects.is_empty() {
-        ui::note("No projects yet. Run `greenbyte create <name>`.");
+        ui::note("No projects yet. Run `envbyte create <name>`.");
         return Ok(());
     }
     ui::heading("Projects");
