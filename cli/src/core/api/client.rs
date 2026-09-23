@@ -45,10 +45,15 @@ impl Session {
     }
 }
 
-/// Default server address. Override with `GREENBYTE_SERVER`.
+/// Hosted Greenbyte API, used when `GREENBYTE_SERVER` is not set.
+pub const DEFAULT_SERVER: &str = "https://greenbyte-cli.onrender.com";
+
+/// Server address. Override with `GREENBYTE_SERVER`.
 pub fn server_url() -> String {
     std::env::var("GREENBYTE_SERVER")
-        .unwrap_or_else(|_| "http://localhost:3030".to_string())
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_SERVER.to_string())
         .trim_end_matches('/')
         .to_string()
 }

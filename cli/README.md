@@ -72,7 +72,7 @@ greenbyte status | audit
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GREENBYTE_SERVER` | `http://localhost:3030` | API URL; remote servers must use HTTPS |
+| `GREENBYTE_SERVER` | `https://greenbyte-cli.onrender.com` | API URL; remote servers must use HTTPS |
 | `GREENBYTE_IDENTITY_KEY` | unset | Identity secret for CI, instead of a file |
 | `GREENBYTE_IDENTITY_FILE` | `~/.greenbyte-identity` | Where the identity key is stored |
 

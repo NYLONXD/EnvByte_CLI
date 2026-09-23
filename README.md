@@ -119,7 +119,9 @@ and Apple Silicon) and Windows are attached to every
 [GitHub release](https://github.com/NYLONXD/GreenByte_CLI/releases), each with a
 `.sha256` file to verify against.
 
-The CLI defaults to `http://localhost:3030`. It can also be set explicitly:
+The CLI talks to the hosted server at `https://greenbyte-cli.onrender.com` by
+default, so a fresh install needs no configuration. To use the local API
+started above instead, point it at localhost:
 
 ```bash
 export GREENBYTE_SERVER=http://localhost:3030
@@ -333,7 +335,7 @@ Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*
 
 | Variable | Default | Description |
 |---|---|---|
-| `GREENBYTE_SERVER` | `http://localhost:3030` | API URL; non-local servers must use HTTPS |
+| `GREENBYTE_SERVER` | `https://greenbyte-cli.onrender.com` | API URL; non-local servers must use HTTPS |
 | `GREENBYTE_IDENTITY_KEY` | unset | Identity secret key for CI, instead of a file on disk |
 | `GREENBYTE_IDENTITY_FILE` | `~/.greenbyte-identity` | Where the identity key is stored |
 | `GREENBYTE_MASTER_KEY` | unset | Only for reading snapshots written before key wrapping |
