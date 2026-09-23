@@ -30,6 +30,15 @@ pub struct VerifyEmailRequest {
     pub token: String,
 }
 
+/// Carries the password so that only whoever chose it can have a token sent;
+/// otherwise anyone could verify an account somebody else registered to
+/// their address, and then sign in with a password they never set.
+#[derive(Deserialize)]
+pub struct ResendVerificationRequest {
+    pub email: String,
+    pub password: String,
+}
+
 #[derive(Deserialize)]
 pub struct ForgotPasswordRequest {
     pub email: String,

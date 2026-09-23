@@ -69,6 +69,17 @@ pub async fn verify_email(server: &str, email: &str, token: &str) -> Result<Auth
     .await
 }
 
+/// Asks for a fresh verification token. The server answers the same way
+/// whether or not one was sent.
+pub async fn resend_verification(server: &str, email: &str, password: &str) -> Result<(), String> {
+    send(
+        anonymous(server, "/auth/resend-verification")?
+            .json(&serde_json::json!({ "email": email, "password": password })),
+        "Verification resend",
+    )
+    .await
+}
+
 pub async fn login(server: &str, request: LoginRequest<'_>) -> Result<AuthResponse, String> {
     send_json(anonymous(server, "/auth/login")?.json(&request), "Login").await
 }

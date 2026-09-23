@@ -107,6 +107,9 @@ pub enum Commands {
     /// Create an account
     Register,
 
+    /// Resend the email verification token and finish signing up
+    Verify,
+
     /// Sign in
     Login,
 
@@ -160,6 +163,7 @@ pub async fn dispatch(command: Commands) -> Result<(), String> {
             IdentityAction::Replace => commands::identity::replace().await,
         },
         Commands::Register => commands::account::register().await,
+        Commands::Verify => commands::account::verify().await,
         Commands::Login => commands::account::login().await,
         Commands::Logout => commands::account::logout().await,
         Commands::Whoami => commands::account::whoami().await,

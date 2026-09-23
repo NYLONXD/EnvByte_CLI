@@ -21,6 +21,10 @@ pub fn credential_routes(state: AppState) -> Router<AppState> {
         .route("/auth/signup", post(session::signup))
         .route("/auth/login", post(session::login))
         .route("/auth/verify-email", post(session::verify_email))
+        .route(
+            "/auth/resend-verification",
+            post(session::resend_verification),
+        )
         .route("/auth/forgot-password", post(session::forgot_password))
         .route("/auth/reset-password", post(session::reset_password))
         .route("/auth/refresh", post(session::refresh))

@@ -141,6 +141,11 @@ docker compose logs api
 
 Copy the requested token from the logs and paste it into the CLI prompt. Production mode rejects log-based email delivery and requires SMTP.
 
+If the token is lost or expires before you use it, run `greenbyte verify`. It
+asks for the email and password you registered with, sends a new token, and
+finishes signing you in. An unverified registration whose token expired no
+longer holds its email or username, so registering again also works.
+
 If the CLI was not installed, replace `greenbyte` in any example with:
 
 ```bash
@@ -246,6 +251,7 @@ Use `greenbyte rotate -y` to skip the prompt in a script.
 ```text
 Account
   greenbyte register                        create an account
+  greenbyte verify                          resend the verification token and finish signing up
   greenbyte login                           sign in (also publishes your identity key)
   greenbyte logout                          sign out on this machine
   greenbyte whoami                          show the signed-in account
@@ -339,6 +345,15 @@ Project initialization adds `.greenbyte`, `.greenbyte-logs`, `.env`, and `.env.*
 | `GREENBYTE_IDENTITY_KEY` | unset | Identity secret key for CI, instead of a file on disk |
 | `GREENBYTE_IDENTITY_FILE` | `~/.greenbyte-identity` | Where the identity key is stored |
 | `GREENBYTE_MASTER_KEY` | unset | Only for reading snapshots written before key wrapping |
+
+### API behind a reverse proxy
+
+The API rate-limits by client IP. Behind a proxy or load balancer (Render,
+Fly, Heroku, nginx), every connection arrives from the proxy, so all users
+would share one limit. Set `GREENBYTE_TRUSTED_PROXY_HOPS` to the number of
+proxies in front of the API — `1` for Render — and the client address is read
+from `X-Forwarded-For` instead. Leave it at the default `0` when clients
+connect directly, because the header is then client-controlled.
 
 Every push declares which project key version it encrypted under, and the server
 rejects anything but the current one. A client that missed a rotation fails

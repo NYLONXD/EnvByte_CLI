@@ -512,3 +512,143 @@ async fn collaborative_project(
     assert_eq!(status, StatusCode::OK);
     project_id
 }
+
+async fn sign_up(api: &Harness, name: &str, password: &str) -> StatusCode {
+    api.call(
+        "POST",
+        "/auth/signup",
+        None,
+        json!({
+            "username": name,
+            "email": format!("{name}@example.com"),
+            "password": password,
+        }),
+    )
+    .await
+    .0
+}
+
+async fn mailed_token(api: &Harness, email: &str) -> String {
+    api.email
+        .verifications
+        .lock()
+        .await
+        .get(email)
+        .cloned()
+        .expect("verification token")
+}
+
+#[sqlx::test]
+async fn a_verification_token_is_resent_only_to_whoever_chose_the_password(pool: PgPool) {
+    let api = Harness::new(pool.clone()).await;
+    let password = "a-sufficiently-long-password";
+    assert_eq!(sign_up(&api, "dave", password).await, StatusCode::OK);
+    let first = mailed_token(&api, "dave@example.com").await;
+    // Let the per-account cooldown lapse.
+    sqlx::query("UPDATE email_verifications SET created_at = now() - interval '5 minutes'")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/resend-verification",
+            None,
+            json!({ "email": "dave@example.com", "password": "not-the-right-password" }),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "the answer must not reveal a mismatch"
+    );
+    assert_eq!(mailed_token(&api, "dave@example.com").await, first);
+
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/resend-verification",
+            None,
+            json!({ "email": "dave@example.com", "password": password }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let second = mailed_token(&api, "dave@example.com").await;
+    assert_ne!(second, first);
+
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/verify-email",
+            None,
+            json!({ "email": "dave@example.com", "token": first }),
+        )
+        .await;
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "a resend retires the old token"
+    );
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/verify-email",
+            None,
+            json!({ "email": "dave@example.com", "token": second }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn verification_resends_are_throttled(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let password = "a-sufficiently-long-password";
+    assert_eq!(sign_up(&api, "erin", password).await, StatusCode::OK);
+    let first = mailed_token(&api, "erin@example.com").await;
+
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/resend-verification",
+            None,
+            json!({ "email": "erin@example.com", "password": password }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(mailed_token(&api, "erin@example.com").await, first);
+}
+
+#[sqlx::test]
+async fn a_lapsed_unverified_signup_releases_its_address(pool: PgPool) {
+    let api = Harness::new(pool.clone()).await;
+    assert_eq!(
+        sign_up(&api, "frank", "somebody-elses-password").await,
+        StatusCode::OK
+    );
+    assert_eq!(
+        sign_up(&api, "frank", "a-sufficiently-long-password").await,
+        StatusCode::CONFLICT,
+        "a pending verification still holds the address"
+    );
+
+    sqlx::query("UPDATE email_verifications SET expires_at = now() - interval '1 minute'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        sign_up(&api, "frank", "a-sufficiently-long-password").await,
+        StatusCode::OK
+    );
+    let token = mailed_token(&api, "frank@example.com").await;
+    let (status, _) = api
+        .call(
+            "POST",
+            "/auth/verify-email",
+            None,
+            json!({ "email": "frank@example.com", "token": token }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}

@@ -65,8 +65,12 @@ pub fn app(state: AppState) -> Router {
 
 pub fn build_state(pool: sqlx::PgPool, config: config::Config) -> Result<AppState, String> {
     let email = email::build_sender(&config.email)?;
-    let general_limiter = Arc::new(RateLimiter::per_minute(config.rate_limit_per_minute));
-    let auth_limiter = Arc::new(RateLimiter::per_minute(config.auth_rate_limit_per_minute));
+    let hops = config.trusted_proxy_hops;
+    let general_limiter =
+        Arc::new(RateLimiter::per_minute(config.rate_limit_per_minute).trusting_proxy_hops(hops));
+    let auth_limiter = Arc::new(
+        RateLimiter::per_minute(config.auth_rate_limit_per_minute).trusting_proxy_hops(hops),
+    );
     Ok(AppState {
         pool,
         config: Arc::new(config),

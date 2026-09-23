@@ -1,4 +1,4 @@
-//! `greenbyte register`, `login`, `logout` and `reset-password`.
+//! `greenbyte register`, `verify`, `login`, `logout` and `reset-password`.
 
 use colored::Colorize;
 use zeroize::Zeroizing;
@@ -44,7 +44,16 @@ pub async fn register() -> Result<(), String> {
     )
     .await;
     bar.finish_and_clear();
-    let signup = signup?;
+    let signup = signup.map_err(|error| {
+        if error.contains("(409") {
+            format!(
+                "{error}
+That email or username is taken. If it is yours and was never                  verified, run `greenbyte verify` to get a new token."
+            )
+        } else {
+            error
+        }
+    })?;
 
     if !signup.verification_required {
         return Err(
@@ -55,20 +64,50 @@ pub async fn register() -> Result<(), String> {
         "A verification token was sent to {}",
         email.cyan()
     ));
+    complete_verification(&server, &email).await?;
+    ui::note("Account created. Colleagues can now seal project keys to you.");
+    Ok(())
+}
+
+/// Sends a fresh verification token, for when the first one was lost or
+/// expired, then finishes signing up.
+pub async fn verify() -> Result<(), String> {
+    println!("{}", "Verify your Greenbyte email".bold());
+    println!();
+
+    let email = ui::prompt("Email: ")?;
+    let password = Zeroizing::new(ui::prompt_password("Password: ")?);
+    validate_email(&email)?;
+
+    let server = server_url();
+    let bar = ui::spinner("Requesting a new token...");
+    let sent = accounts::resend_verification(&server, &email, &password).await;
+    bar.finish_and_clear();
+    sent?;
+
+    ui::step(&format!(
+        "If {} is registered and unverified, and the password matches, a new token is on its way.",
+        email.cyan()
+    ));
+    ui::note("Tokens can be resent once a minute. Only the newest one works.");
+    complete_verification(&server, &email).await
+}
+
+/// Reads the emailed token, verifies it, and signs this device in.
+async fn complete_verification(server: &str, email: &str) -> Result<(), String> {
     let token = Zeroizing::new(ui::prompt("Verification token: ")?);
 
     let bar = ui::spinner("Verifying...");
-    let auth = accounts::verify_email(&server, &email, &token).await;
+    let auth = accounts::verify_email(server, email, &token).await;
     bar.finish_and_clear();
     let auth = auth?;
 
-    store_session(&email, &auth)?;
-    let session = Session::new(&server, auth.token)?;
+    store_session(email, &auth)?;
+    let session = Session::new(server, auth.token)?;
     let identity = ensure_identity_published(&session).await?;
 
-    ui::success(&format!("Account created for {}.", email.cyan()));
+    ui::success(&format!("Email verified; signed in as {}.", email.cyan()));
     ui::field("Identity", &identity.fingerprint());
-    ui::note("You are signed in. Colleagues can now seal project keys to you.");
     Ok(())
 }
 
@@ -91,7 +130,16 @@ pub async fn login() -> Result<(), String> {
     )
     .await;
     bar.finish_and_clear();
-    let auth = auth?;
+    let auth = auth.map_err(|error| {
+        if error.contains("(401") {
+            format!(
+                "{error}
+Check the email and password. If you never verified this                  account, run `greenbyte verify`."
+            )
+        } else {
+            error
+        }
+    })?;
 
     store_session(&email, &auth)?;
     let session = Session::new(&server, auth.token)?;

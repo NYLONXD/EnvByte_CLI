@@ -59,7 +59,7 @@ that would miss a member or leave a file on the old key.
 ## Commands
 
 ```text
-greenbyte register | login | logout | whoami | reset-password
+greenbyte register | verify | login | logout | whoami | reset-password
 greenbyte identity [show | publish | export | replace]
 greenbyte create <project> | init [project] | projects
 greenbyte push [-m <msg>] [-f <file>] | pull [-f <file>] [--force]

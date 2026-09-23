@@ -16,6 +16,7 @@ pub struct Config {
     pub public_cli_url: String,
     pub rate_limit_per_minute: u32,
     pub auth_rate_limit_per_minute: u32,
+    pub trusted_proxy_hops: usize,
     pub email: EmailConfig,
 }
 
@@ -73,6 +74,7 @@ impl Config {
                 .unwrap_or_else(|_| "https://github.com/greenbyte/greenbyte".to_string()),
             rate_limit_per_minute: parse("GREENBYTE_RATE_LIMIT_PER_MINUTE", 300)?,
             auth_rate_limit_per_minute: parse("GREENBYTE_AUTH_RATE_LIMIT_PER_MINUTE", 20)?,
+            trusted_proxy_hops: parse("GREENBYTE_TRUSTED_PROXY_HOPS", 0)?,
             email,
         })
     }

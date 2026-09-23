@@ -207,6 +207,7 @@ pub fn test_config() -> Config {
         public_cli_url: "https://example.com".to_string(),
         rate_limit_per_minute: 10_000,
         auth_rate_limit_per_minute: 10_000,
+        trusted_proxy_hops: 0,
         email: EmailConfig::Log,
     }
 }

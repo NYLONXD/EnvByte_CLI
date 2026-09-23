@@ -11,7 +11,8 @@ use crate::{
     features::accounts::{
         dto::{
             AuthResponse, ForgotPasswordRequest, LoginRequest, RefreshRequest,
-            ResetPasswordRequest, SignupRequest, SignupResponse, VerifyEmailRequest,
+            ResendVerificationRequest, ResetPasswordRequest, SignupRequest, SignupResponse,
+            VerifyEmailRequest,
         },
         validation::{normalize_email, validate_password, validate_username},
     },
@@ -45,6 +46,21 @@ pub async fn signup(
     };
     let verification = Zeroizing::new(random_token(32));
     let mut transaction = state.pool.begin().await?;
+    // An account whose verification lapsed never proved it owns its address,
+    // so it must not hold that address or username forever.
+    sqlx::query(
+        "DELETE FROM users u
+         WHERE u.email_verified_at IS NULL
+           AND (lower(u.email) = lower($1) OR lower(u.username) = lower($2))
+           AND NOT EXISTS (
+               SELECT 1 FROM email_verifications v
+               WHERE v.user_id = u.id AND v.consumed_at IS NULL AND v.expires_at > now()
+           )",
+    )
+    .bind(&user.email)
+    .bind(&user.username)
+    .execute(&mut *transaction)
+    .await?;
     sqlx::query("INSERT INTO users (id, username, email, password_hash) VALUES ($1, $2, $3, $4)")
         .bind(user.id)
         .bind(&user.username)
@@ -147,6 +163,82 @@ pub async fn verify_email(
         .await?;
     transaction.commit().await?;
     build_auth_response(&state.pool, &state, user).await
+}
+
+/// Minimum gap between verification emails to one account.
+const RESEND_COOLDOWN_SECONDS: f64 = 60.0;
+
+pub async fn resend_verification(
+    State(state): State<AppState>,
+    Json(request): Json<ResendVerificationRequest>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let email = normalize_email(&request.email)?;
+    let password = Zeroizing::new(request.password);
+    let user = sqlx::query_as::<_, User>(
+        "SELECT id, username, email, password_hash, public_key FROM users
+         WHERE lower(email) = lower($1) AND email_verified_at IS NULL",
+    )
+    .bind(&email)
+    .fetch_optional(&state.pool)
+    .await?;
+    let encoded = user
+        .as_ref()
+        .map(|user| user.password_hash.clone())
+        .unwrap_or_else(dummy_password_hash);
+    let verified = tokio::task::spawn_blocking(move || verify_password(&password, &encoded))
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, "password verification worker failed");
+            ApiError::Internal
+        })?;
+    if let (Some(user), true) = (user, verified) {
+        let recently_sent = sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (
+                 SELECT 1 FROM email_verifications
+                 WHERE user_id = $1 AND created_at > now() - make_interval(secs => $2)
+             )",
+        )
+        .bind(user.id)
+        .bind(RESEND_COOLDOWN_SECONDS)
+        .fetch_one(&state.pool)
+        .await?;
+        if !recently_sent {
+            let verification = Zeroizing::new(random_token(32));
+            let mut transaction = state.pool.begin().await?;
+            sqlx::query(
+                "DELETE FROM email_verifications WHERE user_id = $1 AND consumed_at IS NULL",
+            )
+            .bind(user.id)
+            .execute(&mut *transaction)
+            .await?;
+            sqlx::query(
+                "INSERT INTO email_verifications (id, user_id, token_hash, expires_at)
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(Uuid::new_v4())
+            .bind(user.id)
+            .bind(hash_token(&verification))
+            .bind(
+                chrono::Utc::now()
+                    + chrono::Duration::hours(state.config.email_verification_ttl_hours),
+            )
+            .execute(&mut *transaction)
+            .await?;
+            transaction.commit().await?;
+            if let Err(error) = state
+                .email
+                .send_verification(&user.email, &verification)
+                .await
+            {
+                tracing::error!(%error, user_id = %user.id, "verification resend failed");
+            }
+        }
+    }
+    // Always the same answer: it must not reveal which addresses are
+    // registered, verified, or paired with the given password.
+    Ok(Json(serde_json::json!({
+        "message": "If that address and password match an unverified account, a new token has been sent."
+    })))
 }
 
 pub async fn forgot_password(
