@@ -12,6 +12,13 @@ every archive and its `.sha256`, and pushes to each channel below that is
 switched on. The install scripts on the website always fetch the latest
 release, so they need no update.
 
+Each release also carries `envbyte-setup.exe`, the Windows installer built from
+`installer/`. The website's Download button links to
+`releases/latest/download/envbyte-setup.exe`, so the button only works once a
+release made by this workflow exists. Like the install scripts, the installer
+downloads whichever release is latest, so it has its own version in
+`installer/Cargo.toml` that does not need bumping with the CLI.
+
 Do not tag or `cargo publish` by hand (past the one-time first publish under
 crates.io below): the release creates the tag, and publishing to crates.io on
 its own is how a version ends up there while the install scripts still have

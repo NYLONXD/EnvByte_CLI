@@ -3,6 +3,8 @@
 export const SITE_URL = "https://envbyte.trackedge.in";
 export const REPO_URL = "https://github.com/NYLONXD/EnvByte_CLI";
 export const API_STATUS_URL = "https://api.envbyte.trackedge.in/health/ready";
+/** The Windows installer (installer/ in the repo), attached to every release. */
+export const WINDOWS_SETUP_URL = `${REPO_URL}/releases/latest/download/envbyte-setup.exe`;
 
 export type Shell = "sh" | "powershell";
 
@@ -14,8 +16,6 @@ export interface InstallMethod {
   note: string;
 }
 
-// Only channels that are live. Each package manager in packaging/README.md is
-// added here once its first release has actually been published there.
 export const INSTALL_METHODS: InstallMethod[] = [
   {
     id: "sh",
@@ -32,6 +32,34 @@ export const INSTALL_METHODS: InstallMethod[] = [
     command: `powershell -c "irm ${SITE_URL}/install.ps1 | iex"`,
     shell: "powershell",
     note: "Works in Command Prompt or PowerShell. No administrator rights needed.",
+  },
+  {
+    id: "npm",
+    label: "npm",
+    command: "npm install -g envbyte",
+    shell: "sh",
+    note: "Pulls in the prebuilt binary for your platform.",
+  },
+  {
+    id: "brew",
+    label: "Homebrew",
+    command: "brew install nylonxd/tap/envbyte",
+    shell: "sh",
+    note: "macOS and Linux.",
+  },
+  {
+    id: "scoop",
+    label: "Scoop",
+    command: "scoop bucket add nylonxd https://github.com/NYLONXD/scoop-bucket; scoop install nylonxd/envbyte",
+    shell: "powershell",
+    note: "Windows, per-user, no administrator rights needed.",
+  },
+  {
+    id: "winget",
+    label: "winget",
+    command: "winget install Envbyte.Envbyte",
+    shell: "powershell",
+    note: "Windows Package Manager.",
   },
   {
     id: "cargo",

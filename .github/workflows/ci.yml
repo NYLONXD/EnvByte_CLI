@@ -54,6 +54,19 @@ jobs:
           tool: cargo-deny
       - run: cargo deny check advisories bans licenses sources
 
+  # The Windows installer's real code only compiles on Windows; the Linux jobs
+  # above see a stub that points at install.sh.
+  installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy -p envbyte-setup --all-targets --locked -- -D warnings
+      - run: cargo test -p envbyte-setup --locked
+
   # Proves the minimum supported Rust version in Cargo.toml is still accurate.
   msrv:
     runs-on: ubuntu-latest

@@ -32,7 +32,12 @@ Windows (Command Prompt or PowerShell):
 powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"
 ```
 
-Both scripts download the release for your platform from GitHub, check it
+Or, on Windows, download
+[envbyte-setup.exe](https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte-setup.exe)
+and double-click it. It opens a terminal window, shows what it will install and
+where, and asks before changing anything.
+
+All of these download the release for your platform from GitHub, check it
 against its published SHA-256 before installing, and need no admin rights.
 To build from source instead (Rust 1.88+):
 
@@ -352,6 +357,8 @@ server/src/
   migrations/     database schema
 web/              envbyte.trackedge.in: Vite + React + Tailwind + GSAP,
   public/         served as-is, including install.sh and install.ps1
+installer/        envbyte-setup.exe, the Windows installer the website's
+                  Download button serves
 packaging/        npm packages and the Homebrew, Scoop and winget recipes
 ```
 

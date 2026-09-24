@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { MOTION_OK, SplitText, gsap, useGSAP } from "../lib/gsap";
+import { DownloadButton } from "./DownloadButton";
 import { InstallBox } from "./InstallBox";
 import { Terminal } from "./Terminal";
 
@@ -23,6 +24,7 @@ export function Hero() {
           .from("[data-animate='badge']", { autoAlpha: 0, scale: 0.9, duration: 0.5 }, "<0.1")
           .from("[data-animate='lede']", { autoAlpha: 0, y: 16, duration: 0.6 }, "-=0.45")
           .from("[data-animate='install']", { autoAlpha: 0, y: 16, duration: 0.6 }, "-=0.4")
+          .from("[data-animate='download']", { autoAlpha: 0, y: 16, duration: 0.6 }, "-=0.45")
           .from(
             "[data-animate='terminal']",
             { autoAlpha: 0, y: 32, scale: 0.97, duration: 0.9, ease: "expo.out" },
@@ -80,6 +82,10 @@ export function Hero() {
           </p>
 
           <InstallBox />
+
+          <div data-animate="download" className="mt-5">
+            <DownloadButton />
+          </div>
         </div>
 
         <Terminal />
