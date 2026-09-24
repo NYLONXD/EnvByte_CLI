@@ -3,8 +3,13 @@
 End-to-end encrypted `.env` sharing for teams, with rotatable keys.
 
 ```bash
-cargo install envbyte      # or: cargo binstall envbyte
+curl -fsSL https://envbyte.trackedge.in/install.sh | sh    # macOS, Linux
+irm https://envbyte.trackedge.in/install.ps1 | iex         # Windows PowerShell
+npm install -g envbyte                                     # or brew, scoop, winget
+cargo install envbyte                                      # from source
 ```
+
+All methods: https://envbyte.trackedge.in
 
 Formerly published as `greenbyte`. The first time `envbyte` runs it copies your
 identity key and moves your sign-in and project links to their new names.
@@ -94,7 +99,7 @@ ENVBYTE_IDENTITY_KEY="$ENVBYTE_CI_IDENTITY" envbyte pull -f .env.ci --force
 - Identity and data keys are zeroized on drop
 
 The server needs running too — see the
-[repository](https://github.com/NYLONXD/envbyte) for the API, its
+[repository](https://github.com/NYLONXD/EnvByte_CLI) for the API, its
 container image, and `SECURITY.md`.
 
 ## License

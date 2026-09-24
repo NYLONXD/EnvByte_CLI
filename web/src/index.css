@@ -1,0 +1,146 @@
+@import "tailwindcss";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Semantic colours. Components use these utilities (bg-raised, text-muted,
+   border-line, ...) and never raw hex, so the light theme is one block below. */
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --color-page: var(--page);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-mint: #3ee3a3;
+  --color-on-mint: #05261a;
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-glow: var(--glow);
+
+  /* The terminal and code cards stay dark in both themes. */
+  --color-term: #0a0f1d;
+  --color-term-bar: #111830;
+  --color-term-fg: #d7deea;
+  --color-term-muted: #7d879b;
+  --color-term-note: #8fa3ff;
+}
+
+:root {
+  --page: #070b16;
+  --raised: #0d1324;
+  --sunken: #0a0f1d;
+  --line: rgb(232 236 244 / 0.09);
+  --line-strong: rgb(232 236 244 / 0.16);
+  --fg: #e8ecf4;
+  --muted: #9aa4b8;
+  --accent: #3ee3a3;
+  --accent-soft: rgb(62 227 163 / 0.12);
+  --glow: rgb(62 227 163 / 0.16);
+  --dots: rgb(232 236 244 / 0.05);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --page: #f6f8fb;
+    --raised: #ffffff;
+    --sunken: #eef2f7;
+    --line: rgb(11 16 32 / 0.1);
+    --line-strong: rgb(11 16 32 / 0.18);
+    --fg: #0b1020;
+    --muted: #4a5468;
+    --accent: #047857;
+    --accent-soft: rgb(4 120 87 / 0.1);
+    --glow: rgb(62 227 163 / 0.22);
+    --dots: rgb(11 16 32 / 0.05);
+    color-scheme: light;
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-page font-sans text-fg antialiased;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-display tracking-tight;
+  }
+
+  :focus-visible {
+    @apply rounded-md outline-2 outline-offset-3 outline-mint;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-290 px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Inline code in prose. */
+  .chip {
+    @apply rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-[0.88em] whitespace-nowrap text-accent;
+  }
+
+  .kicker {
+    @apply mb-3 font-mono text-[0.8rem] tracking-[0.08em] text-accent uppercase;
+  }
+
+  .card {
+    @apply rounded-2xl border border-line bg-raised p-6 sm:p-7;
+  }
+
+  .button {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-mint px-5 py-3 font-semibold text-on-mint transition hover:-translate-y-px hover:shadow-[0_8px_24px_var(--glow)];
+  }
+
+  .button-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line-strong px-5 py-3 font-semibold text-fg transition hover:border-mint;
+  }
+
+  /* In the components layer so utilities such as `hidden` still win. */
+  .cursor {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.1em;
+    margin-left: 1px;
+    vertical-align: -0.2em;
+    background: var(--color-mint);
+    animation: blink 1s steps(1) infinite;
+  }
+
+  .dot-grid {
+    background-image: radial-gradient(circle at 1px 1px, var(--dots) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+}
+
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}

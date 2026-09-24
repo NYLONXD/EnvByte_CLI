@@ -1,0 +1,85 @@
+// Copy and links that appear in more than one component.
+
+export const SITE_URL = "https://envbyte.trackedge.in";
+export const REPO_URL = "https://github.com/NYLONXD/EnvByte_CLI";
+export const API_STATUS_URL = "https://api.envbyte.trackedge.in/health/ready";
+
+export type Shell = "sh" | "powershell";
+
+export interface InstallMethod {
+  id: string;
+  label: string;
+  command: string;
+  shell: Shell;
+  note: string;
+}
+
+export const INSTALL_METHODS: InstallMethod[] = [
+  {
+    id: "sh",
+    label: "macOS / Linux",
+    command: `curl -fsSL ${SITE_URL}/install.sh | sh`,
+    shell: "sh",
+    note: "Installs to ~/.envbyte/bin and checks the download's SHA-256 first.",
+  },
+  {
+    id: "powershell",
+    label: "Windows",
+    command: `irm ${SITE_URL}/install.ps1 | iex`,
+    shell: "powershell",
+    note: "Run in PowerShell. No administrator rights needed.",
+  },
+  {
+    id: "npm",
+    label: "npm",
+    command: "npm install -g envbyte",
+    shell: "sh",
+    note: "Pulls in the prebuilt binary for your platform.",
+  },
+  {
+    id: "brew",
+    label: "Homebrew",
+    command: "brew install nylonxd/tap/envbyte",
+    shell: "sh",
+    note: "macOS and Linux.",
+  },
+  {
+    id: "scoop",
+    label: "Scoop",
+    command: "scoop bucket add nylonxd https://github.com/NYLONXD/scoop-bucket; scoop install nylonxd/envbyte",
+    shell: "powershell",
+    note: "Windows, per-user, no administrator rights needed.",
+  },
+  {
+    id: "winget",
+    label: "winget",
+    command: "winget install Envbyte.Envbyte",
+    shell: "powershell",
+    note: "Windows Package Manager.",
+  },
+  {
+    id: "cargo",
+    label: "Cargo",
+    command: "cargo install envbyte",
+    shell: "sh",
+    note: "Builds from source. Needs Rust 1.88 or newer.",
+  },
+];
+
+export type TerminalLine =
+  | { kind: "command"; text: string }
+  | { kind: "output" | "success" | "comment"; text: string };
+
+/** The hero's example session. */
+export const TERMINAL_SCRIPT: TerminalLine[] = [
+  { kind: "command", text: "envbyte create payments-api" },
+  { kind: "success", text: "✓ Created payments-api, key sealed to your identity" },
+  { kind: "command", text: 'envbyte push -m "add stripe keys"' },
+  { kind: "output", text: "  encrypting .env with project key v1" },
+  { kind: "success", text: "✓ Pushed version 3. The server only sees ciphertext" },
+  { kind: "command", text: "envbyte add priya@company.com" },
+  { kind: "success", text: "✓ Invited priya@company.com (sealed to 3f9a-1c07)" },
+  { kind: "comment", text: "# meanwhile, on Priya's laptop" },
+  { kind: "command", text: "envbyte init && envbyte pull" },
+  { kind: "success", text: "✓ Decrypted .env · 14 variables" },
+];

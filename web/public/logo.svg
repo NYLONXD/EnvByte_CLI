@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Envbyte</title>
+  <rect width="64" height="64" rx="15" fill="#0B1020"/>
+  <circle cx="32" cy="25.5" r="9.5" fill="#3EE3A3"/>
+  <path d="M27.6 30.5h8.8l3 14.7c.3 1.6-.9 2.8-2.5 2.8h-9.8c-1.6 0-2.8-1.2-2.5-2.8z" fill="#3EE3A3"/>
+</svg>

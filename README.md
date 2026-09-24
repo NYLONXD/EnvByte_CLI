@@ -1,4 +1,8 @@
+<img src="web/public/logo.svg" width="72" alt="Envbyte logo">
+
 # Envbyte
+
+**[envbyte.trackedge.in](https://envbyte.trackedge.in)**
 
 Envbyte is an end-to-end encrypted `.env` manager for teams. It gives environment files versioned history, rollback, invitations, roles and an audit trail, without any secret ever reaching the server and without anyone having to send a key to anyone.
 
@@ -12,6 +16,37 @@ This repository contains the complete application:
 - A Rust CLI that encrypts, decrypts, pushes, pulls, versions, and restores `.env*` files.
 - A Rust/Axum API for authentication, projects, membership, synchronization, and audit events.
 - PostgreSQL storage, automatic SQL migrations, Docker packaging, and CI checks.
+- The website at envbyte.trackedge.in and the install scripts it serves.
+
+## Install
+
+macOS and Linux:
+
+```bash
+curl -fsSL https://envbyte.trackedge.in/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://envbyte.trackedge.in/install.ps1 | iex
+```
+
+Both scripts download the release for your platform from GitHub, check it
+against its published SHA-256 before installing, and need no admin rights.
+Package managers work too:
+
+```bash
+npm install -g envbyte                           # any OS with Node 18+
+brew install nylonxd/tap/envbyte                 # macOS, Linux
+scoop bucket add nylonxd https://github.com/NYLONXD/scoop-bucket
+scoop install nylonxd/envbyte                    # Windows
+winget install Envbyte.Envbyte                   # Windows
+cargo install envbyte                            # from source, Rust 1.88+
+```
+
+Then run `envbyte register`. The CLI uses the hosted server at
+`https://api.envbyte.trackedge.in` unless `ENVBYTE_SERVER` says otherwise.
 
 ## How it works
 
@@ -111,17 +146,16 @@ Run it directly during development:
 cargo run -p envbyte -- --help
 ```
 
-Or install the `envbyte` command. Any of these work:
+Or install the `envbyte` command using any method from [Install](#install),
+or from this checkout:
 
 ```bash
-cargo install envbyte              # from crates.io
-cargo binstall envbyte             # prebuilt binary, no compile
-cargo install --path cli --locked    # from this checkout
+cargo install --path cli --locked
 ```
 
 Prebuilt binaries for Linux (gnu and musl, x86_64 and aarch64), macOS (Intel
 and Apple Silicon) and Windows are attached to every
-[GitHub release](https://github.com/NYLONXD/envbyte/releases), each with a
+[GitHub release](https://github.com/NYLONXD/EnvByte_CLI/releases), each with a
 `.sha256` file to verify against.
 
 The CLI talks to the hosted server at `https://api.envbyte.trackedge.in` by
@@ -321,7 +355,13 @@ server/src/
   db/             row types and the audit recorder
   infra/          email delivery and rate limiting
   migrations/     database schema
+web/              envbyte.trackedge.in: Vite + React + Tailwind + GSAP,
+  public/         served as-is, including install.sh and install.ps1
+packaging/        npm packages and the Homebrew, Scoop and winget recipes
 ```
+
+[`packaging/README.md`](packaging/README.md) covers cutting a release and
+setting up each install channel.
 
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) explains the layering rules, what
 belongs in each file, how to add a feature, and walks through key rotation end
@@ -405,6 +445,14 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo build --workspace --release --locked
 docker compose config --quiet
+```
+
+And for the website and install scripts:
+
+```bash
+cd web && npm ci && npm run build   # type-checks, then builds to web/dist
+npm run dev                         # local preview with hot reload
+shellcheck -s sh public/install.sh
 ```
 
 ## Stop or restart the project

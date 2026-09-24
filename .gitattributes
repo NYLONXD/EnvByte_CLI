@@ -1,0 +1,2 @@
+# Shell scripts are piped straight into `sh`; a CRLF line ending breaks them.
+*.sh text eol=lf

@@ -5,11 +5,11 @@ edition = "2021"
 description = "Share .env files across a team with end-to-end encryption and rotatable keys"
 authors = ["Envbyte"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/NYLONXD/envbyte"
-homepage = "https://github.com/NYLONXD/envbyte"
+repository = "https://github.com/NYLONXD/EnvByte_CLI"
+homepage = "https://envbyte.trackedge.in"
 documentation = "https://docs.rs/envbyte"
 readme = "README.md"
-rust-version = "1.85"
+rust-version = "1.88"
 keywords = ["dotenv", "secrets", "env", "encryption", "cli"]
 categories = ["command-line-utilities", "cryptography", "development-tools"]
 
@@ -70,7 +70,7 @@ mac_address = "1.1"
 colored = "2.1"
 
 # Spinner / progress indicator
-indicatif = "0.17"
+indicatif = "0.18"
 
 # Home directory resolution
 dirs = "5.0"

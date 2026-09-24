@@ -1,0 +1,21 @@
+{
+  "name": "envbyte",
+  "version": "0.0.0",
+  "description": "End-to-end encrypted .env sharing for teams, with rotatable keys",
+  "keywords": ["dotenv", "env", "secrets", "encryption", "cli"],
+  "homepage": "https://envbyte.trackedge.in",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NYLONXD/EnvByte_CLI.git"
+  },
+  "bugs": "https://github.com/NYLONXD/EnvByte_CLI/issues",
+  "license": "MIT OR Apache-2.0",
+  "bin": {
+    "envbyte": "bin/envbyte.js"
+  },
+  "files": ["bin/envbyte.js", "README.md"],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {}
+}

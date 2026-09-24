@@ -1,4 +1,6 @@
 target/
+web/
+packaging/
 .git/
 .github/
 .envbyte/

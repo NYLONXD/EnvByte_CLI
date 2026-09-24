@@ -161,12 +161,113 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+      # A version published by hand (the very first one has to be, before
+      # Trusted Publishing can be configured) must not fail the release.
+      - name: Check whether this version is already on crates.io
+        id: published
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -A "envbyte-release (https://github.com/${{ github.repository }})" \
+            "https://crates.io/api/v1/crates/envbyte/${GITHUB_REF_NAME#v}")
+          echo "exists=$([ "$status" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.published.outputs.exists != 'true'
       - uses: rust-lang/crates-io-auth-action@v1
+        if: steps.published.outputs.exists != 'true'
         id: auth
       - run: cargo publish -p envbyte --locked
+        if: steps.published.outputs.exists != 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  # The channels below each switch on with a repository variable
+  # (Settings -> Secrets and variables -> Actions -> Variables) once their
+  # account and secret exist, so a release never fails on one that is not set
+  # up yet. packaging/README.md walks through each.
+
+  # PUBLISH_NPM=true, with secret NPM_TOKEN.
+  npm:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_NPM == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance: links each package to this build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: node packaging/npm/build.mjs "$GITHUB_REF_NAME" artifacts npm-out
+      # Platform packages first, so the launcher's optionalDependencies
+      # resolve the moment it appears.
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          publish() {
+            spec=$(node -p "const p = require('./$1/package.json'); p.name + '@' + p.version")
+            if npm view "$spec" version >/dev/null 2>&1; then
+              echo "$spec is already published"
+              return
+            fi
+            (cd "$1" && npm publish --access public --provenance)
+          }
+          for dir in npm-out/cli-*; do publish "$dir"; done
+          publish npm-out/envbyte
+
+  # PUBLISH_TAPS=true, with secret TAP_TOKEN able to push to both repos.
+  taps:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_TAPS == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - run: python3 packaging/render.py "$GITHUB_REF_NAME" artifacts manifests
+      - name: Push the Homebrew formula and the Scoop manifest
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config --global user.name "envbyte-release"
+          git config --global user.email "envbyte-release@users.noreply.github.com"
+          update() { # <owner/repo> <directory to copy in>
+            checkout=$(mktemp -d)
+            git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/$1.git" "$checkout"
+            cp -R "$2"/. "$checkout"/
+            git -C "$checkout" add -A
+            if git -C "$checkout" diff --cached --quiet; then
+              echo "$1 is already up to date"
+              return
+            fi
+            git -C "$checkout" commit -m "envbyte ${GITHUB_REF_NAME#v}"
+            git -C "$checkout" push origin HEAD:main
+          }
+          update NYLONXD/homebrew-tap manifests/homebrew
+          update NYLONXD/scoop-bucket manifests/scoop
+
+  # PUBLISH_WINGET=true, with secret WINGET_TOKEN, once the first version has
+  # been accepted into microsoft/winget-pkgs by hand.
+  winget:
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_WINGET == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Envbyte.Envbyte
+          installers-regex: 'windows-msvc\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}
 
   container:
     needs: verify
@@ -186,7 +287,8 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/${{ github.repository }}/server
+          # Image names must be lowercase, which the repository name is not.
+          images: ghcr.io/nylonxd/envbyte-server
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

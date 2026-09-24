@@ -70,7 +70,7 @@ impl Config {
             password_reset_ttl_minutes: parse("ENVBYTE_PASSWORD_RESET_TTL_MINUTES", 30)?,
             database_max_connections: parse("DATABASE_MAX_CONNECTIONS", 20)?,
             public_cli_url: env::var("ENVBYTE_PUBLIC_CLI_URL")
-                .unwrap_or_else(|_| "https://github.com/NYLONXD/envbyte".to_string()),
+                .unwrap_or_else(|_| "https://envbyte.trackedge.in".to_string()),
             rate_limit_per_minute: parse("ENVBYTE_RATE_LIMIT_PER_MINUTE", 300)?,
             auth_rate_limit_per_minute: parse("ENVBYTE_AUTH_RATE_LIMIT_PER_MINUTE", 20)?,
             trusted_proxy_hops: parse("ENVBYTE_TRUSTED_PROXY_HOPS", 0)?,
