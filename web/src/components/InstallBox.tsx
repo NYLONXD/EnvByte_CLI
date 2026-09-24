@@ -57,7 +57,7 @@ export function InstallBox() {
         role="tablist"
         aria-label="Install method"
         onKeyDown={handleKeyDown}
-        className="flex gap-1 overflow-x-auto rounded-t-xl border border-b-0 border-line bg-raised p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-1 overflow-x-auto rounded-t-2xl border border-b-0 border-line bg-raised p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {INSTALL_METHODS.map((method) => {
           const active = method.id === selected.id;
@@ -77,8 +77,8 @@ export function InstallBox() {
                 setSelectedId(method.id);
                 setCopied(false);
               }}
-              className={`flex-none rounded-lg px-2.5 py-1.5 text-[0.8rem] transition-colors ${
-                active ? "bg-accent-soft font-semibold text-accent" : "text-muted hover:text-fg"
+              className={`flex-none rounded-full px-3 py-1.5 text-[0.82rem] transition-colors ${
+                active ? "bg-plain-soft font-semibold text-plain" : "text-muted hover:text-fg"
               }`}
             >
               {method.label}
@@ -91,9 +91,9 @@ export function InstallBox() {
         id="install-panel"
         role="tabpanel"
         aria-labelledby={`install-tab-${selected.id}`}
-        className="flex items-center gap-3 rounded-b-xl border border-line bg-term py-3.5 pr-3.5 pl-4.5"
+        className="flex items-center gap-3 rounded-b-2xl border border-line bg-term py-3.5 pr-3.5 pl-4.5"
       >
-        <pre className="min-w-0 flex-1 text-[0.82rem] leading-7 sm:text-[0.9rem] whitespace-pre-wrap text-term-fg [overflow-wrap:anywhere]">
+        <pre className="min-w-0 flex-1 text-[0.76rem] leading-7 sm:text-[0.82rem] whitespace-pre-wrap text-term-fg [overflow-wrap:anywhere]">
           <code>
             <span className="text-mint select-none">{selected.shell === "powershell" ? "> " : "$ "}</span>
             {selected.command}
@@ -103,7 +103,7 @@ export function InstallBox() {
           type="button"
           onClick={handleCopy}
           aria-label="Copy install command"
-          className={`inline-flex flex-none items-center gap-1.5 rounded-lg border px-2.5 py-2 sm:px-3 sm:py-1.5 text-sm transition-colors ${
+          className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-2.5 py-2 sm:px-3.5 sm:py-1.5 text-sm transition-colors ${
             copied ? "border-mint text-mint" : "border-white/15 text-term-fg hover:border-mint"
           }`}
         >

@@ -87,3 +87,17 @@ export const TERMINAL_SCRIPT: TerminalLine[] = [
   { kind: "command", text: "envbyte init && envbyte pull" },
   { kind: "success", text: "✓ Decrypted .env · 14 variables" },
 ];
+
+/**
+ * The file in the hero's lens. Made-up values, and none in a format a
+ * provider's secret scanner looks for, so pushes are not blocked over them.
+ */
+export const ENV_SAMPLE = [
+  "# payments-api, production",
+  "DATABASE_URL=postgres://app:Hx7pQ2vL@db.internal/pay",
+  "STRIPE_API_KEY=demo_51NfK2bL9xQ7mZ4cR8vYw",
+  "SESSION_SECRET=7c1e9f04b2d86a35e1f0c4",
+  "REDIS_URL=redis://:a8Kd2mQ@cache.internal:6379",
+  "MAILER_TOKEN=mt_8f2c1e9d04b7a653",
+  "CHECKOUT_V2=true",
+];

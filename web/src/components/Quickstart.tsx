@@ -1,4 +1,6 @@
-const COMMANDS = [
+import { Terminal } from "./Terminal";
+
+const STEPS = [
   { label: "Create your account", command: "envbyte register" },
   { label: "Start a project in your app's folder", command: "envbyte create payments-api" },
   { label: "Encrypt and upload your .env", command: 'envbyte push -m "first version"' },
@@ -8,35 +10,26 @@ const COMMANDS = [
 
 export function Quickstart() {
   return (
-    <section id="quickstart" className="py-16 sm:py-24 lg:py-28">
-      <div className="container-page grid items-center gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
-        <div>
-          <p className="kicker" data-reveal>
-            Quickstart
+    <section id="quickstart" className="border-t border-line py-20 sm:py-24 lg:py-32">
+      <div className="container-page grid items-start gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-16">
+        <div className="min-w-0">
+          <h2 className="heading-2">Up and running in a minute</h2>
+          <p className="mt-5 max-w-[34em] text-muted">
+            No keys to copy and no passwords to share. Your teammate signs in, accepts the invitation and pulls.
           </p>
-          <h2 className="text-[clamp(1.8rem,3.6vw,2.6rem)] leading-tight font-bold" data-reveal>
-            Up and running in a minute
-          </h2>
-          <p className="mt-4.5 max-w-[36em] text-[1.06rem] text-muted" data-reveal>
-            Create an account, link a directory, push. Your teammate signs in, joins with their invitation and pulls. No
-            keys to copy, no passwords to share.
-          </p>
+          <ol className="mt-9 grid gap-5">
+            {STEPS.map((step, index) => (
+              <li key={step.command} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-x-3">
+                <span className="font-mono text-sm leading-7 text-muted">{index + 1}</span>
+                <div className="min-w-0">
+                  <p className="leading-7">{step.label}</p>
+                  <code className="mt-1 block font-mono text-[0.8rem] break-all text-plain">{step.command}</code>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
-        <ol className="grid gap-2.5">
-          {COMMANDS.map((item, index) => (
-            <li
-              key={item.command}
-              data-reveal
-              className="grid gap-1.5 rounded-xl border border-line bg-raised px-4.5 py-3.5"
-            >
-              <span className="text-sm text-muted">
-                <span className="font-mono text-accent">{index + 1}. </span>
-                {item.label}
-              </span>
-              <code className="chip max-w-full justify-self-start overflow-x-auto whitespace-pre">{item.command}</code>
-            </li>
-          ))}
-        </ol>
+        <Terminal />
       </div>
     </section>
   );

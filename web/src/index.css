@@ -1,13 +1,15 @@
 @import "tailwindcss";
-@import "@fontsource-variable/space-grotesk";
-@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/martian-mono/wdth.css";
+@import "@fontsource-variable/instrument-sans";
 
-/* Semantic colours. Components use these utilities (bg-raised, text-muted,
-   border-line, ...) and never raw hex, so the light theme is one block below. */
+/* Two inks, after the colour-shifting ink on banknotes: mint is anything
+   readable (your file, your team), copper is anything sealed (ciphertext,
+   the server). Components use the semantic utilities (text-plain,
+   bg-sealed-soft, border-line, ...) and never raw hex, so the light theme is
+   one block below. */
 @theme inline {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-display: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Martian Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   --color-page: var(--page);
   --color-raised: var(--raised);
@@ -16,48 +18,54 @@
   --color-line-strong: var(--line-strong);
   --color-fg: var(--fg);
   --color-muted: var(--muted);
-  --color-mint: #3ee3a3;
-  --color-on-mint: #05261a;
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-glow: var(--glow);
+  --color-plain: var(--plain);
+  --color-plain-soft: var(--plain-soft);
+  --color-sealed: var(--sealed);
+  --color-sealed-soft: var(--sealed-soft);
 
-  /* The terminal and code cards stay dark in both themes. */
-  --color-term: #0a0f1d;
-  --color-term-bar: #111830;
-  --color-term-fg: #d7deea;
-  --color-term-muted: #7d879b;
-  --color-term-note: #8fa3ff;
+  /* The inks themselves, for fills that sit on dark panels in both themes. */
+  --color-mint: #3ee3a3;
+  --color-on-mint: #04261a;
+  --color-copper: #f2a571;
+
+  /* The .env lens, the terminal and code panels stay dark in both themes.
+     The sealed side of the lens is a warm dark, the readable side a cool one. */
+  --color-term: #061417;
+  --color-term-sealed: #16110d;
+  --color-term-bar: #0b2024;
+  --color-term-line: rgb(213 227 222 / 0.1);
+  --color-term-fg: #d5e3de;
+  --color-term-muted: #7e9793;
 }
 
 :root {
-  --page: #070b16;
-  --raised: #0d1324;
-  --sunken: #0a0f1d;
-  --line: rgb(232 236 244 / 0.09);
-  --line-strong: rgb(232 236 244 / 0.16);
-  --fg: #e8ecf4;
-  --muted: #9aa4b8;
-  --accent: #3ee3a3;
-  --accent-soft: rgb(62 227 163 / 0.12);
-  --glow: rgb(62 227 163 / 0.16);
-  --dots: rgb(232 236 244 / 0.05);
+  --page: #0a191c;
+  --raised: #0f2327;
+  --sunken: #071417;
+  --line: rgb(230 238 234 / 0.09);
+  --line-strong: rgb(230 238 234 / 0.17);
+  --fg: #e6eeea;
+  --muted: #93a9a5;
+  --plain: #3ee3a3;
+  --plain-soft: rgb(62 227 163 / 0.12);
+  --sealed: #f2a571;
+  --sealed-soft: rgb(242 165 113 / 0.12);
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --page: #f6f8fb;
+    --page: #eef3f0;
     --raised: #ffffff;
-    --sunken: #eef2f7;
-    --line: rgb(11 16 32 / 0.1);
-    --line-strong: rgb(11 16 32 / 0.18);
-    --fg: #0b1020;
-    --muted: #4a5468;
-    --accent: #047857;
-    --accent-soft: rgb(4 120 87 / 0.1);
-    --glow: rgb(62 227 163 / 0.22);
-    --dots: rgb(11 16 32 / 0.05);
+    --sunken: #e3ebe7;
+    --line: rgb(10 31 34 / 0.1);
+    --line-strong: rgb(10 31 34 / 0.2);
+    --fg: #0a1f22;
+    --muted: #4a5f5b;
+    --plain: #047857;
+    --plain-soft: rgb(4 120 87 / 0.1);
+    --sealed: #9a4a17;
+    --sealed-soft: rgb(154 74 23 / 0.1);
     color-scheme: light;
   }
 }
@@ -68,18 +76,34 @@
   }
 
   body {
-    @apply bg-page font-sans text-fg antialiased;
+    @apply bg-page font-sans text-[1.0625rem] leading-relaxed text-fg antialiased;
     overflow-x: hidden;
   }
 
+  /* Headlines are set in the same mono as the files Envbyte carries, at its
+     widest, so a heading reads like a line from a .env. */
   h1,
-  h2,
+  h2 {
+    @apply font-mono font-semibold text-balance;
+    font-stretch: 112.5%;
+    letter-spacing: -0.035em;
+  }
+
   h3 {
-    @apply font-display tracking-tight;
+    @apply font-sans font-semibold;
+  }
+
+  code,
+  pre {
+    font-stretch: 87.5%;
   }
 
   :focus-visible {
-    @apply rounded-md outline-2 outline-offset-3 outline-mint;
+    @apply rounded-md outline-2 outline-offset-3 outline-plain;
+  }
+
+  ::selection {
+    @apply bg-copper text-[#1a0d04];
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -91,28 +115,24 @@
 
 @layer components {
   .container-page {
-    @apply mx-auto w-full max-w-290 px-4 sm:px-6 lg:px-8;
+    @apply mx-auto w-full max-w-300 px-4 sm:px-6 lg:px-8;
+  }
+
+  .heading-2 {
+    @apply text-[clamp(1.55rem,3.1vw,2.3rem)] leading-[1.15];
   }
 
   /* Inline code in prose. */
   .chip {
-    @apply rounded-md bg-accent-soft px-1.5 py-0.5 font-mono text-[0.88em] whitespace-nowrap text-accent;
-  }
-
-  .kicker {
-    @apply mb-3 font-mono text-[0.8rem] tracking-[0.08em] text-accent uppercase;
-  }
-
-  .card {
-    @apply rounded-2xl border border-line bg-raised p-6 sm:p-7;
+    @apply rounded-md bg-plain-soft px-1.5 py-0.5 font-mono text-[0.8em] whitespace-nowrap text-plain;
   }
 
   .button {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-mint px-5 py-3 font-semibold text-on-mint transition hover:-translate-y-px hover:shadow-[0_8px_24px_var(--glow)];
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-mint px-5.5 py-3 font-semibold text-on-mint transition-colors hover:bg-[#6aecbb];
   }
 
   .button-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-line-strong px-5 py-3 font-semibold text-fg transition hover:border-mint;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-line-strong px-5.5 py-3 font-semibold text-fg transition-colors hover:border-fg/45;
   }
 
   /* In the components layer so utilities such as `hidden` still win. */
@@ -126,12 +146,31 @@
     animation: blink 1s steps(1) infinite;
   }
 
-  .dot-grid {
-    background-image: radial-gradient(circle at 1px 1px, var(--dots) 1px, transparent 0);
-    background-size: 24px 24px;
+  /* The lens's range input covers the whole file and stays invisible; its
+     thumb is a sliver so the pointer and the divider line up exactly. */
+  .lens-range {
+    appearance: none;
+    background: transparent;
+    touch-action: pan-y;
+  }
+  .lens-range::-webkit-slider-runnable-track {
+    height: 100%;
+  }
+  .lens-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 2px;
+    height: 100%;
+  }
+  .lens-range::-moz-range-thumb {
+    width: 2px;
+    height: 100%;
+    border: 0;
+  }
+  .lens-range:focus-visible ~ .lens-divider .lens-handle {
+    outline: 2px solid var(--color-mint);
+    outline-offset: 3px;
   }
 }
-
 
 @keyframes blink {
   50% {

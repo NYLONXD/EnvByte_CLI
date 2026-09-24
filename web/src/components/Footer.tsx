@@ -10,9 +10,9 @@ const LINKS = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-line py-8 text-sm text-muted">
-      <div className="container-page flex flex-wrap items-center gap-x-7 gap-y-4">
-        <a href="/" className="text-base text-fg">
+    <footer className="border-t border-line py-9 text-sm text-muted">
+      <div className="container-page flex flex-wrap items-center gap-x-8 gap-y-4">
+        <a href="/" className="text-fg">
           <Wordmark size={22} />
         </a>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-2">
@@ -22,7 +22,7 @@ export function Footer() {
             </a>
           ))}
         </nav>
-        <p className="sm:ml-auto">© {new Date().getFullYear()} Envbyte · MIT or Apache-2.0</p>
+        <p className="sm:ml-auto">© {new Date().getFullYear()} Envbyte</p>
       </div>
     </footer>
   );

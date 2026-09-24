@@ -1,53 +1,54 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { MOTION_OK, ScrollTrigger, gsap, useGSAP } from "../lib/gsap";
 
-const STEPS = [
+interface Stop {
+  title: string;
+  /** Mint where the file can be read, copper where it is sealed. */
+  sealed: boolean;
+  diagram: { name: string; detail: string; note: string };
+  body: ReactNode;
+}
+
+// Each step sits directly under the part of the diagram it describes.
+const STOPS: Stop[] = [
   {
-    title: "Encrypt locally",
+    title: "Encrypted on your laptop",
+    sealed: false,
+    diagram: { name: "Your laptop", detail: ".env → AES-256-GCM", note: "plaintext stays here" },
     body: (
       <>
-        <code className="chip">envbyte push</code> encrypts your file with AES-256-GCM on your own machine. Only
-        ciphertext is uploaded.
+        <code className="chip">envbyte push</code> encrypts the whole file before it leaves your machine, variable
+        names included.
       </>
     ),
   },
   {
-    title: "A sealed key for each person",
-    body: "The project key is sealed to each member's personal X25519 identity key. Inviting someone seals a copy for them, so there's nothing to paste into chat.",
+    title: "Stored as noise",
+    sealed: true,
+    diagram: { name: "Envbyte server", detail: "ciphertext + sealed keys", note: "holds no key to open them" },
+    body: "The server keeps the ciphertext and one sealed copy of the project key per member. A leaked database gives an attacker nothing to read.",
   },
   {
-    title: "The server stores noise",
-    body: "The server keeps ciphertext and sealed keys it cannot open. A leaked database would give an attacker nothing to read.",
+    title: "Opened with their own key",
+    sealed: false,
+    diagram: { name: "Teammate", detail: "sealed key → .env", note: "opens their own copy" },
+    body: "Each copy of the project key is sealed to one person's X25519 identity. Inviting someone seals a copy for them, so nothing gets pasted into chat.",
   },
 ];
 
-const NODES = [
-  { x: 4, width: 236, title: "Your laptop", mono: ".env → AES-256-GCM", muted: "plaintext never leaves" },
-  {
-    x: 364,
-    width: 236,
-    title: "Envbyte server",
-    mono: "ciphertext + sealed keys",
-    muted: "holds no key to open them",
-    accent: true,
-  },
-  { x: 724, width: 172, title: "Teammate", mono: "AES-256-GCM → .env", muted: "opens their own copy" },
-];
-
+// Three equal nodes on a 900-wide canvas, 120 apart; the step columns below
+// use the same proportions so they line up with them.
+const NODE_WIDTH = 220;
+const NODE_GAP = 120;
+const nodeX = (index: number) => index * (NODE_WIDTH + NODE_GAP);
 const LINKS = [
-  { from: 248, to: 356, label: "ciphertext" },
-  { from: 608, to: 716, label: "their sealed key" },
+  { from: nodeX(0) + NODE_WIDTH + 8, to: nodeX(1) - 8, label: "ciphertext" },
+  { from: nodeX(1) + NODE_WIDTH + 8, to: nodeX(2) - 8, label: "sealed key" },
 ];
 
-/** Laptop → server → teammate, with packets travelling along the arrows. */
 function FlowDiagram() {
   return (
-    <svg
-      viewBox="0 0 900 180"
-      className="mt-12 mb-2 hidden w-full sm:block"
-      role="img"
-      aria-labelledby="flow-title flow-desc"
-    >
+    <svg viewBox="0 0 900 150" className="hidden w-full overflow-visible sm:block" role="img" aria-labelledby="flow-title flow-desc">
       <title id="flow-title">How a .env file travels through Envbyte</title>
       <desc id="flow-desc">
         Your laptop encrypts the file and uploads only ciphertext. The server stores ciphertext and one sealed copy of
@@ -55,51 +56,56 @@ function FlowDiagram() {
       </desc>
       <defs>
         <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M0 0 10 5 0 10z" className="fill-muted" />
+          <path d="M0 0 10 5 0 10z" className="fill-sealed" />
         </marker>
       </defs>
 
-      {NODES.map((node) => (
-        <g key={node.title} data-flow-node>
-          <rect
-            x={node.x}
-            y="30"
-            width={node.width}
-            height="120"
-            rx="16"
-            className={node.accent ? "fill-accent-soft stroke-mint" : "fill-raised stroke-line-strong"}
-          />
-          <text
-            x={node.x + node.width / 2}
-            y="74"
-            textAnchor="middle"
-            className="fill-fg font-display text-[19px] font-bold"
-          >
-            {node.title}
-          </text>
-          <text x={node.x + node.width / 2} y="102" textAnchor="middle" className="fill-accent font-mono text-[13px]">
-            {node.mono}
-          </text>
-          <text x={node.x + node.width / 2} y="126" textAnchor="middle" className="fill-muted text-[13px]">
-            {node.muted}
-          </text>
-        </g>
-      ))}
+      {STOPS.map((stop, index) => {
+        const x = nodeX(index);
+        const middle = x + NODE_WIDTH / 2;
+        return (
+          <g key={stop.title}>
+            <rect
+              x={x + 0.75}
+              y="15"
+              width={NODE_WIDTH - 1.5}
+              height="120"
+              rx="14"
+              strokeWidth="1.5"
+              className={stop.sealed ? "fill-sealed-soft stroke-sealed/55" : "fill-plain-soft stroke-plain/45"}
+            />
+            <text x={middle} y="60" textAnchor="middle" className="fill-fg font-sans text-[18px] font-semibold">
+              {stop.diagram.name}
+            </text>
+            <text
+              x={middle}
+              y="88"
+              textAnchor="middle"
+              className={`font-mono text-[12px] [font-stretch:87.5%] ${stop.sealed ? "fill-sealed" : "fill-plain"}`}
+            >
+              {stop.diagram.detail}
+            </text>
+            <text x={middle} y="112" textAnchor="middle" className="fill-muted font-sans text-[13px]">
+              {stop.diagram.note}
+            </text>
+          </g>
+        );
+      })}
 
       {LINKS.map((link) => (
         <g key={link.label}>
           <path
-            d={`M${link.from} 90H${link.to}`}
+            d={`M${link.from} 75H${link.to}`}
             data-flow-line
-            className="fill-none stroke-muted"
+            className="fill-none stroke-sealed/70"
             strokeWidth="1.5"
             strokeDasharray="5 5"
             markerEnd="url(#flow-arrow)"
           />
-          <text x={(link.from + link.to) / 2} y="78" textAnchor="middle" className="fill-muted text-[13px]">
+          <text x={(link.from + link.to) / 2} y="62" textAnchor="middle" className="fill-muted font-sans text-[12.5px]">
             {link.label}
           </text>
-          <circle cx={link.from} cy="90" r="4.5" className="fill-mint opacity-0" data-flow-packet />
+          <circle cx={link.from} cy="75" r="4.5" className="fill-sealed opacity-0" data-flow-packet />
         </g>
       ))}
     </svg>
@@ -109,24 +115,14 @@ function FlowDiagram() {
 export function HowItWorks() {
   const scope = useRef<HTMLElement>(null);
 
+  // Motion that explains: the dashes march the way data flows, and a packet
+  // of ciphertext crosses each link, only while the diagram is on screen.
   useGSAP(
     () => {
       const mm = gsap.matchMedia();
       mm.add(MOTION_OK, () => {
-        gsap.from("[data-flow-node]", {
-          autoAlpha: 0,
-          y: 18,
-          duration: 0.7,
-          stagger: 0.18,
-          ease: "power3.out",
-          scrollTrigger: { trigger: "[data-flow-node]", start: "top 85%", once: true },
-        });
-
-        // The dashes march in the direction data flows.
         gsap.to("[data-flow-line]", { strokeDashoffset: -20, duration: 1, ease: "none", repeat: -1 });
 
-        // One packet crosses to the server, then the next leaves for the
-        // teammate, on a loop that only runs while the diagram is on screen.
         const packets = gsap.utils.toArray<SVGCircleElement>("[data-flow-packet]");
         const loop = gsap.timeline({ repeat: -1, repeatDelay: 0.6, paused: true });
         packets.forEach((packet, index) => {
@@ -148,28 +144,21 @@ export function HowItWorks() {
   );
 
   return (
-    <section ref={scope} id="how" className="scroll-mt-12 py-16 sm:py-24 lg:py-28">
+    <section ref={scope} id="how" className="scroll-mt-12 border-t border-line py-20 sm:py-24 lg:py-32">
       <div className="container-page">
-        <p className="kicker" data-reveal>
-          How it works
-        </p>
-        <h2 className="max-w-[22em] text-[clamp(1.8rem,3.6vw,2.6rem)] leading-tight font-bold" data-reveal>
-          Encrypted before it leaves. Unlockable only by your team.
-        </h2>
+        <h2 className="heading-2 max-w-[29ch]">Encrypted before it leaves. Readable only by your team.</h2>
 
-        <FlowDiagram />
-
-        <ol className="mt-10 grid gap-5 md:grid-cols-3">
-          {STEPS.map((step, index) => (
-            <li key={step.title} className="card" data-reveal>
-              <span className="mb-4 inline-grid size-8 place-items-center rounded-lg bg-accent-soft font-mono font-semibold text-accent">
-                {index + 1}
-              </span>
-              <h3 className="text-lg font-bold">{step.title}</h3>
-              <p className="mt-2.5 text-muted">{step.body}</p>
-            </li>
-          ))}
-        </ol>
+        <div className="mt-12 lg:mt-16">
+          <FlowDiagram />
+          <ol className="mt-10 grid max-w-[40rem] gap-9 lg:max-w-none lg:grid-cols-3 lg:gap-x-[13.3333%]">
+            {STOPS.map((stop) => (
+              <li key={stop.title} className={`border-t-2 pt-5 ${stop.sealed ? "border-sealed" : "border-plain"}`}>
+                <h3 className="text-[1.125rem]">{stop.title}</h3>
+                <p className="mt-2 text-muted">{stop.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
     </section>
   );

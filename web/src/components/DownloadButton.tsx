@@ -13,9 +13,7 @@ export function DownloadButton() {
         </svg>
         Download Envbyte
       </a>
-      <p className="text-sm text-muted">
-        Windows 10 and 11 · <span className="font-mono text-[0.8rem]">.exe</span> · no admin rights needed
-      </p>
+      <p className="text-sm text-muted">For Windows 10 and 11. No admin rights needed.</p>
     </div>
   );
 }
