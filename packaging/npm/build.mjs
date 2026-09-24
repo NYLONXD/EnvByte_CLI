@@ -16,13 +16,13 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PLATFORMS = [
-  { name: "@envbyte/cli-darwin-arm64", os: "darwin", cpu: ["arm64"], target: "aarch64-apple-darwin" },
-  { name: "@envbyte/cli-darwin-x64", os: "darwin", cpu: ["x64"], target: "x86_64-apple-darwin" },
+  { name: "@nylonxd/envbyte-darwin-arm64", os: "darwin", cpu: ["arm64"], target: "aarch64-apple-darwin" },
+  { name: "@nylonxd/envbyte-darwin-x64", os: "darwin", cpu: ["x64"], target: "x86_64-apple-darwin" },
   // Statically linked: runs on glibc and musl (Alpine) alike.
-  { name: "@envbyte/cli-linux-x64", os: "linux", cpu: ["x64"], target: "x86_64-unknown-linux-musl" },
-  { name: "@envbyte/cli-linux-arm64", os: "linux", cpu: ["arm64"], target: "aarch64-unknown-linux-gnu" },
+  { name: "@nylonxd/envbyte-linux-x64", os: "linux", cpu: ["x64"], target: "x86_64-unknown-linux-musl" },
+  { name: "@nylonxd/envbyte-linux-arm64", os: "linux", cpu: ["arm64"], target: "aarch64-unknown-linux-gnu" },
   // Also installed on Windows ARM64, which runs x64 programs under emulation.
-  { name: "@envbyte/cli-win32-x64", os: "win32", cpu: ["x64", "arm64"], target: "x86_64-pc-windows-msvc" },
+  { name: "@nylonxd/envbyte-win32-x64", os: "win32", cpu: ["x64", "arm64"], target: "x86_64-pc-windows-msvc" },
 ];
 
 const [version, archives, out] = process.argv.slice(2);
@@ -66,7 +66,7 @@ for (const platform of PLATFORMS) {
   const scratch = mkdtempSync(join(tmpdir(), "envbyte-npm-"));
   extract(archive, scratch);
   const exe = windows ? "envbyte.exe" : "envbyte";
-  const directory = join(out, platform.name.replace("@envbyte/", ""));
+  const directory = join(out, `cli-${platform.os}-${platform.cpu[0]}`);
   mkdirSync(join(directory, "bin"), { recursive: true });
   copyFileSync(join(scratch, `envbyte-${platform.target}`, exe), join(directory, "bin", exe));
   chmodSync(join(directory, "bin", exe), 0o755);

@@ -7,13 +7,13 @@
 const { spawnSync } = require("node:child_process");
 
 const PACKAGES = {
-  "darwin arm64": "@envbyte/cli-darwin-arm64",
-  "darwin x64": "@envbyte/cli-darwin-x64",
-  "linux arm64": "@envbyte/cli-linux-arm64",
-  "linux x64": "@envbyte/cli-linux-x64",
-  "win32 x64": "@envbyte/cli-win32-x64",
+  "darwin arm64": "@nylonxd/envbyte-darwin-arm64",
+  "darwin x64": "@nylonxd/envbyte-darwin-x64",
+  "linux arm64": "@nylonxd/envbyte-linux-arm64",
+  "linux x64": "@nylonxd/envbyte-linux-x64",
+  "win32 x64": "@nylonxd/envbyte-win32-x64",
   // Windows on ARM runs the x64 build through emulation.
-  "win32 arm64": "@envbyte/cli-win32-x64",
+  "win32 arm64": "@nylonxd/envbyte-win32-x64",
 };
 
 const platform = `${process.platform} ${process.arch}`;

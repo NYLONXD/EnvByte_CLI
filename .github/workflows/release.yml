@@ -234,30 +234,33 @@ jobs:
   # account and secret exist, so a release never fails on one that is not set
   # up yet. packaging/README.md walks through each.
 
-  # PUBLISH_NPM=true, with secret NPM_TOKEN.
+  # PUBLISH_NPM=true, once every package has its Trusted Publisher set.
   npm:
     needs: [plan, release]
     if: vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
+    # Trusted Publishing: npm accepts GitHub's OIDC token in place of an
+    # access token, so there is no npm secret to store, leak or let expire.
     permissions:
       contents: read
-      id-token: write # npm provenance: links each package to this build
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
+      # No registry-url: it writes a placeholder token into .npmrc, and the
+      # login here is the OIDC exchange npm performs on its own.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm 11.5.1 or newer; Node 22 ships npm 10.
+      - run: npm install -g npm@^11.5.1
       - run: node packaging/npm/build.mjs "${{ needs.plan.outputs.tag }}" artifacts npm-out
       # Platform packages first, so the launcher's optionalDependencies
       # resolve the moment it appears.
       - name: Publish to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           publish() {

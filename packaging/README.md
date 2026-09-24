@@ -26,7 +26,7 @@ nothing.
 | File | What it does |
 |---|---|
 | `npm/envbyte/` | The `envbyte` npm package: a small launcher that runs the platform binary |
-| `npm/build.mjs` | Builds the launcher and the five `@envbyte/cli-*` platform packages from a release's archives |
+| `npm/build.mjs` | Builds the launcher and the five `@nylonxd/envbyte-*` platform packages from a release's archives |
 | `render.py` | Writes the Homebrew formula, Scoop manifest and winget manifests from a release's checksums |
 
 ## Switching channels on
@@ -52,12 +52,24 @@ skipped.
 
 ### npm (`PUBLISH_NPM`)
 
-1. On npmjs.com, create a free organization named `envbyte`. That reserves the
-   `@envbyte` scope the platform packages live under.
-2. Create a granular access token with read and write access to all packages
-   (it must be able to create the new ones), and save it as the repository
-   secret `NPM_TOKEN`.
-3. Set the variable `PUBLISH_NPM` to `true`.
+Six packages: the `envbyte` launcher, and one binary per platform under the
+`@nylonxd` organization's scope. Releases publish them through Trusted
+Publishing, with no npm token stored in GitHub. npm only lets you set that up on
+a package that already exists, so the first version goes up by hand:
+
+1. After a release exists, download its archives into a folder and build and
+   publish, platform packages first, with a granular access token that can
+   write to all packages and to the `nylonxd` organization:
+
+   ```bash
+   node packaging/npm/build.mjs v0.4.1 <archives folder> npm-out
+   for dir in npm-out/cli-* npm-out/envbyte; do (cd "$dir" && npm publish --access public); done
+   ```
+
+2. On npmjs.com, open each of the six packages → Settings → Trusted Publisher →
+   GitHub Actions: owner `NYLONXD`, repository `EnvByte_CLI`, workflow
+   `release.yml`.
+3. Set the variable `PUBLISH_NPM` to `true`, and delete the token from step 1.
 
 ### Homebrew and Scoop (`PUBLISH_TAPS`)
 
