@@ -63,7 +63,7 @@ Users then install with `brew install nylonxd/tap/envbyte`, or
 Microsoft reviews every new package, so the first version goes in by hand:
 
 1. After the release exists, download its `.sha256` files into a folder and run
-   `python3 packaging/render.py v0.4.0 <that folder> out`.
+   `python3 packaging/render.py v0.4.1 <that folder> out`.
 2. Fork `microsoft/winget-pkgs`, copy `out/winget/manifests` into the fork, and
    open a pull request. `winget validate --manifest <folder>` checks the files
    first; `wingetcreate submit <folder>` does the fork and pull request for you.

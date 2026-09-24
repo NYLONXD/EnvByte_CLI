@@ -1,7 +1,7 @@
 {
   "name": "envbyte-web",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "description": "envbyte.trackedge.in: the Envbyte website and install scripts",
   "scripts": {
