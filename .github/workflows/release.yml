@@ -1,28 +1,84 @@
 name: Release
 
-# Cutting a release is `git tag v0.3.0 && git push --tags`. Everything below
-# runs from that tag, so the binaries people download are built from exactly
-# the commit the tag points at.
+# Cutting a release is bumping the version in cli/Cargo.toml and pushing that
+# to main. Every push to main checks whether its version has a GitHub release
+# yet; when it does not, the commit is tested, built, tagged v<version> and
+# published. There is no tag to push by hand, so a version cannot reach
+# crates.io while the install scripts still have nothing to download.
+#
+# Running it by hand on another branch is a dry run: it tests and builds every
+# target but publishes nothing.
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to build (for a dry run)"
-        required: true
+
+# One release at a time. A push that lands mid-release waits, then finds the
+# version already released and stops.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Refuses to publish a tag whose tests do not pass, or whose tag does not
-  # match the version in Cargo.toml.
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      publish: ${{ steps.plan.outputs.publish }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="envbyte"))')"
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          publish=false
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            status="$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+            case "$status" in
+              200) echo "$tag is already released" ;;
+              404) publish=true ;;
+              *) echo "::error::GitHub answered $status when asked for release $tag" >&2; exit 1 ;;
+            esac
+          fi
+
+          if [ "$publish" = true ]; then
+            # A leftover tag pointing elsewhere would label binaries built from
+            # this commit with another commit's source.
+            tagged="$(git ls-remote --tags origin "refs/tags/$tag" "refs/tags/$tag^{}" | tail -n 1 | cut -f 1)"
+            if [ -n "$tagged" ] && [ "$tagged" != "$GITHUB_SHA" ]; then
+              echo "::error::$tag already exists at $tagged, not at $GITHUB_SHA. Bump the version in cli/Cargo.toml, or delete the tag." >&2
+              exit 1
+            fi
+            echo "Releasing $tag from $GITHUB_SHA"
+          fi
+
+          build="$publish"
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then build=true; fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
+  # Refuses to publish a commit whose tests do not pass.
   verify:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -44,16 +100,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Tag must match the crate version
-        run: |
-          tag="${GITHUB_REF_NAME#v}"
-          crate="$(cargo metadata --no-deps --format-version 1 \
-            | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"]=="envbyte"))')"
-          if [ "$tag" != "$crate" ]; then
-            echo "Tag v$tag does not match cli/Cargo.toml version $crate" >&2
-            exit 1
-          fi
-        if: startsWith(github.ref, 'refs/tags/')
       - run: cargo test --workspace --locked
 
   build:
@@ -132,9 +178,11 @@ jobs:
           if-no-files-found: error
 
   release:
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [plan, build]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates the tag and the release
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -144,6 +192,8 @@ jobs:
       - name: Publish the GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.plan.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: artifacts/*
           generate_release_notes: true
           draft: false
@@ -151,8 +201,7 @@ jobs:
   # Runs last so a failed binary build never leaves an unusable version
   # published on crates.io, which cannot be deleted - only yanked.
   crates-io:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [plan, release]
     runs-on: ubuntu-latest
     # Trusted Publishing: GitHub's OIDC token is exchanged for a short-lived
     # crates.io token, so no long-lived registry secret is stored anywhere.
@@ -168,7 +217,7 @@ jobs:
         run: |
           status=$(curl -s -o /dev/null -w '%{http_code}' \
             -A "envbyte-release (https://github.com/${{ github.repository }})" \
-            "https://crates.io/api/v1/crates/envbyte/${GITHUB_REF_NAME#v}")
+            "https://crates.io/api/v1/crates/envbyte/${{ needs.plan.outputs.version }}")
           echo "exists=$([ "$status" = 200 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@stable
         if: steps.published.outputs.exists != 'true'
@@ -187,8 +236,8 @@ jobs:
 
   # PUBLISH_NPM=true, with secret NPM_TOKEN.
   npm:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_NPM == 'true'
+    needs: [plan, release]
+    if: vars.PUBLISH_NPM == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -203,7 +252,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-      - run: node packaging/npm/build.mjs "$GITHUB_REF_NAME" artifacts npm-out
+      - run: node packaging/npm/build.mjs "${{ needs.plan.outputs.tag }}" artifacts npm-out
       # Platform packages first, so the launcher's optionalDependencies
       # resolve the moment it appears.
       - name: Publish to npm
@@ -224,8 +273,8 @@ jobs:
 
   # PUBLISH_TAPS=true, with secret TAP_TOKEN able to push to both repos.
   taps:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_TAPS == 'true'
+    needs: [plan, release]
+    if: vars.PUBLISH_TAPS == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -233,7 +282,7 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
-      - run: python3 packaging/render.py "$GITHUB_REF_NAME" artifacts manifests
+      - run: python3 packaging/render.py "${{ needs.plan.outputs.tag }}" artifacts manifests
       - name: Push the Homebrew formula and the Scoop manifest
         env:
           TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
@@ -250,7 +299,7 @@ jobs:
               echo "$1 is already up to date"
               return
             fi
-            git -C "$checkout" commit -m "envbyte ${GITHUB_REF_NAME#v}"
+            git -C "$checkout" commit -m "envbyte ${{ needs.plan.outputs.version }}"
             git -C "$checkout" push origin HEAD:main
           }
           update NYLONXD/homebrew-tap manifests/homebrew
@@ -259,19 +308,20 @@ jobs:
   # PUBLISH_WINGET=true, with secret WINGET_TOKEN, once the first version has
   # been accepted into microsoft/winget-pkgs by hand.
   winget:
-    needs: release
-    if: startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_WINGET == 'true'
+    needs: [plan, release]
+    if: vars.PUBLISH_WINGET == 'true'
     runs-on: windows-latest
     steps:
       - uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: Envbyte.Envbyte
+          release-tag: ${{ needs.plan.outputs.tag }}
           installers-regex: 'windows-msvc\.zip$'
           token: ${{ secrets.WINGET_TOKEN }}
 
   container:
-    needs: verify
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [plan, verify]
+    if: needs.plan.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -290,8 +340,8 @@ jobs:
           # Image names must be lowercase, which the repository name is not.
           images: ghcr.io/nylonxd/envbyte-server
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ needs.plan.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.plan.outputs.tag }}
       - uses: docker/build-push-action@v6
         with:
           context: .

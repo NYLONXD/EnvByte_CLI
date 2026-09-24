@@ -2,19 +2,26 @@
 
 ## Cutting a release
 
-1. Set the new version in `cli/Cargo.toml` (and `server/Cargo.toml`), commit,
-   push to `main` and wait for CI to pass.
-2. Tag it:
+Set the new version in `cli/Cargo.toml` (and `server/Cargo.toml`), commit, and
+push to `main`. That is the whole process.
 
-   ```bash
-   git tag v0.4.1
-   git push origin v0.4.1
-   ```
+`.github/workflows/release.yml` runs on every push to `main`. When the version
+in `cli/Cargo.toml` has no GitHub release yet, it runs the tests, builds the CLI
+for six targets, tags the commit `v<version>`, publishes a GitHub release with
+every archive and its `.sha256`, and pushes to each channel below that is
+switched on. The install scripts on the website always fetch the latest
+release, so they need no update.
 
-`.github/workflows/release.yml` then runs the tests, builds the CLI for six
-targets, publishes a GitHub release with every archive and its `.sha256`, and
-pushes to each channel below that is switched on. The install scripts on the
-website always fetch the latest release, so they need no update.
+Do not tag or `cargo publish` by hand (past the one-time first publish under
+crates.io below): the release creates the tag, and publishing to crates.io on
+its own is how a version ends up there while the install scripts still have
+nothing to download.
+
+If a release fails on a flaky test or a runner outage, use **Re-run failed
+jobs** on that run. If it fails on a real bug, push the fix to `main`: the
+version still has no release, so that push releases it. Running the workflow by
+hand on any other branch is a dry run that builds every target and publishes
+nothing.
 
 | File | What it does |
 |---|---|
@@ -28,13 +35,20 @@ Each channel after crates.io is off until its repository variable is `true`
 (GitHub → Settings → Secrets and variables → Actions → Variables), so a release
 never fails on an account that is not set up yet.
 
+The website and `README.md` list only the channels that work today. Once a
+channel's first release is published and its install command works on a clean
+machine, add it to `INSTALL_METHODS` in `web/src/lib/content.ts` and to the
+Install section of `README.md`. Not before: a listed command that fails is the
+first thing a new user sees.
+
 ### crates.io
 
 1. Publish the first version by hand: `cargo publish -p envbyte`.
 2. crates.io → `envbyte` → Settings → Trusted Publishing → add
    owner `NYLONXD`, repository `EnvByte_CLI`, workflow `release.yml`.
 
-From then on the tag publishes it. A version already on crates.io is skipped.
+From then on each release publishes it. A version already on crates.io is
+skipped.
 
 ### npm (`PUBLISH_NPM`)
 

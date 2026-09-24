@@ -26,23 +26,18 @@ macOS and Linux:
 curl -fsSL https://envbyte.trackedge.in/install.sh | sh
 ```
 
-Windows (PowerShell):
+Windows (Command Prompt or PowerShell):
 
 ```powershell
-irm https://envbyte.trackedge.in/install.ps1 | iex
+powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"
 ```
 
 Both scripts download the release for your platform from GitHub, check it
 against its published SHA-256 before installing, and need no admin rights.
-Package managers work too:
+To build from source instead (Rust 1.88+):
 
 ```bash
-npm install -g envbyte                           # any OS with Node 18+
-brew install nylonxd/tap/envbyte                 # macOS, Linux
-scoop bucket add nylonxd https://github.com/NYLONXD/scoop-bucket
-scoop install nylonxd/envbyte                    # Windows
-winget install Envbyte.Envbyte                   # Windows
-cargo install envbyte                            # from source, Rust 1.88+
+cargo install envbyte
 ```
 
 Then run `envbyte register`. The CLI uses the hosted server at

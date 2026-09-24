@@ -14,6 +14,8 @@ export interface InstallMethod {
   note: string;
 }
 
+// Only channels that are live. Each package manager in packaging/README.md is
+// added here once its first release has actually been published there.
 export const INSTALL_METHODS: InstallMethod[] = [
   {
     id: "sh",
@@ -25,37 +27,11 @@ export const INSTALL_METHODS: InstallMethod[] = [
   {
     id: "powershell",
     label: "Windows",
-    command: `irm ${SITE_URL}/install.ps1 | iex`,
+    // Wrapped in `powershell -c` so it runs the same from Command Prompt,
+    // PowerShell or Windows Terminal; bare `irm` exists only in PowerShell.
+    command: `powershell -c "irm ${SITE_URL}/install.ps1 | iex"`,
     shell: "powershell",
-    note: "Run in PowerShell. No administrator rights needed.",
-  },
-  {
-    id: "npm",
-    label: "npm",
-    command: "npm install -g envbyte",
-    shell: "sh",
-    note: "Pulls in the prebuilt binary for your platform.",
-  },
-  {
-    id: "brew",
-    label: "Homebrew",
-    command: "brew install nylonxd/tap/envbyte",
-    shell: "sh",
-    note: "macOS and Linux.",
-  },
-  {
-    id: "scoop",
-    label: "Scoop",
-    command: "scoop bucket add nylonxd https://github.com/NYLONXD/scoop-bucket; scoop install nylonxd/envbyte",
-    shell: "powershell",
-    note: "Windows, per-user, no administrator rights needed.",
-  },
-  {
-    id: "winget",
-    label: "winget",
-    command: "winget install Envbyte.Envbyte",
-    shell: "powershell",
-    note: "Windows Package Manager.",
+    note: "Works in Command Prompt or PowerShell. No administrator rights needed.",
   },
   {
     id: "cargo",

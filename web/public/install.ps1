@@ -1,6 +1,9 @@
 # Envbyte installer for Windows.
 #
-#   irm https://envbyte.trackedge.in/install.ps1 | iex
+#   powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"
+#
+# That line works from Command Prompt and PowerShell alike. Inside PowerShell
+# the bare `irm ... | iex` works too.
 #
 # Downloads the release archive from GitHub, checks it against the SHA-256
 # published with the release, installs envbyte.exe into ~\.envbyte\bin and adds
@@ -107,10 +110,12 @@
             Write-Host "Add $installDir to your PATH to run envbyte from anywhere."
         } else {
             [Environment]::SetEnvironmentVariable('Path', (@($installDir) + $entries) -join ';', 'User')
-            Write-Host "Added $installDir to your user PATH."
+            Write-Host "Added $installDir to your user PATH. Open a new terminal window to run envbyte."
         }
     }
-    # Usable in this window straight away, not only in new ones.
+    # Usable straight away when piped into PowerShell directly. Launched through
+    # `powershell -c` this is a child process, which cannot change the PATH of
+    # the window that started it, hence the message above.
     if (($env:Path -split ';') -notcontains $installDir) {
         $env:Path = "$installDir;$env:Path"
     }

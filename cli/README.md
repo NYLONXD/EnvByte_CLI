@@ -3,10 +3,9 @@
 End-to-end encrypted `.env` sharing for teams, with rotatable keys.
 
 ```bash
-curl -fsSL https://envbyte.trackedge.in/install.sh | sh    # macOS, Linux
-irm https://envbyte.trackedge.in/install.ps1 | iex         # Windows PowerShell
-npm install -g envbyte                                     # or brew, scoop, winget
-cargo install envbyte                                      # from source
+curl -fsSL https://envbyte.trackedge.in/install.sh | sh                  # macOS, Linux
+powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"       # Windows
+cargo install envbyte                                                    # from source
 ```
 
 All methods: https://envbyte.trackedge.in

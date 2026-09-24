@@ -98,7 +98,7 @@ detect_target() {
             fi
             ;;
         MINGW* | MSYS* | CYGWIN* | Windows_NT)
-            fail "on Windows, run this in PowerShell instead: irm https://envbyte.trackedge.in/install.ps1 | iex"
+            fail "on Windows, run this instead: powershell -c \"irm https://envbyte.trackedge.in/install.ps1 | iex\""
             ;;
         *)
             fail "unsupported operating system: $os. Install from source with: cargo install envbyte"
