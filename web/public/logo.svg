@@ -1,6 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
   <title id="title">Envbyte</title>
-  <rect width="64" height="64" rx="15" fill="#0B1020"/>
-  <circle cx="32" cy="25.5" r="9.5" fill="#3EE3A3"/>
-  <path d="M27.6 30.5h8.8l3 14.7c.3 1.6-.9 2.8-2.5 2.8h-9.8c-1.6 0-2.8-1.2-2.5-2.8z" fill="#3EE3A3"/>
+  <defs>
+    <linearGradient id="l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4DBBA2"/><stop offset="1" stop-color="#1B6A67"/>
+    </linearGradient>
+    <linearGradient id="r" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FF2C9"/><stop offset="1" stop-color="#35C990"/>
+    </linearGradient>
+    <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <g fill="#fff" stroke="#fff">
+        <path d="M32 2L57.981 17V47L32 62L6.019 47V17ZM32 9.506L51.481 20.753V43.247L32 54.494L12.519 43.247V20.753Z" fill-rule="evenodd" stroke="none"/>
+        <path d="M10.787 19.753L18.2 24.033M10.787 44.247L18.2 39.967M53.213 19.753L45.8 24.033M53.213 44.247L45.8 39.967" fill="none" stroke-width="2.4"/>
+        <path d="M26.8 25.5V20.6A5.2 5.2 0 0 1 37.2 20.6V25.5" fill="none" stroke-width="3.6"/>
+        <path d="M22.9 25H41.1Q43.5 25 43.5 27.4V43L32 51L20.5 43V27.4Q20.5 25 22.9 25Z" stroke="none"/>
+      </g>
+      <!-- "eb", in pixels -->
+      <path fill="#000" d="M32.65 30.6h1.3v2.66h-1.3zM27.45 33.2h2.6v1.36h-2.6zM32.65 33.2h3.9v1.36h-3.9zM26.15 34.5h1.3v1.36h-1.3zM30.05 34.5h1.3v1.36h-1.3zM32.65 34.5h1.3v3.96h-1.3zM36.55 34.5h1.3v3.96h-1.3zM26.15 35.8h5.2v1.36h-5.2zM26.15 37.1h1.3v1.36h-1.3zM27.45 38.4h3.9v1.36h-3.9zM32.65 38.4h3.9v1.36h-3.9z"/>
+    </mask>
+  </defs>
+  <g mask="url(#m)">
+    <rect width="32" height="64" fill="url(#l)"/>
+    <rect x="32" width="32" height="64" fill="url(#r)"/>
+  </g>
 </svg>

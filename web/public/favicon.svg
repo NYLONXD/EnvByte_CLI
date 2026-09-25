@@ -1,5 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="15" fill="#0B1020"/>
-  <circle cx="32" cy="25.5" r="9.5" fill="#3EE3A3"/>
-  <path d="M27.6 30.5h8.8l3 14.7c.3 1.6-.9 2.8-2.5 2.8h-9.8c-1.6 0-2.8-1.2-2.5-2.8z" fill="#3EE3A3"/>
+  <defs>
+    <linearGradient id="l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4DBBA2"/><stop offset="1" stop-color="#1B6A67"/>
+    </linearGradient>
+    <linearGradient id="r" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8FF2C9"/><stop offset="1" stop-color="#35C990"/>
+    </linearGradient>
+    <mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <g fill="#fff" stroke="#fff">
+        <path d="M32 2L57.981 17V47L32 62L6.019 47V17ZM32 11.238L49.981 21.619V42.381L32 52.762L14.019 42.381V21.619Z" fill-rule="evenodd" stroke="none"/>
+        <path d="M26.8 28V23A5.2 5.2 0 0 1 37.2 23V28" fill="none" stroke-width="4.2"/>
+        <path d="M22.4 27.5H41.6Q44 27.5 44 29.9V41.5L32 48.5L20 41.5V29.9Q20 27.5 22.4 27.5Z" stroke="none"/>
+      </g>
+    </mask>
+  </defs>
+  <g mask="url(#m)">
+    <rect width="32" height="64" fill="url(#l)"/>
+    <rect x="32" width="32" height="64" fill="url(#r)"/>
+  </g>
 </svg>

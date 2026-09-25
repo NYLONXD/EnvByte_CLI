@@ -135,8 +135,9 @@ verify_checksum() {
     else
         fail "sha256sum or shasum is required to verify the download"
     fi
-    [ -n "$expected" ] && [ "$expected" = "$actual" ] ||
+    if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
         fail "checksum mismatch for $(basename "$1"): expected $expected, got $actual"
+    fi
     say "Checksum verified"
 }
 

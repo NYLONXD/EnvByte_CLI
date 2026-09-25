@@ -1,4 +1,4 @@
-<img src="web/public/logo.svg" width="72" alt="Envbyte logo">
+<img src="web/public/logo.svg" width="88" alt="Envbyte logo">
 
 # Envbyte
 
