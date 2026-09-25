@@ -74,6 +74,11 @@ a package that already exists, so the first version goes up by hand:
    for dir in npm-out/cli-* npm-out/envbyte; do (cd "$dir" && npm publish --access public); done
    ```
 
+   Run this on Linux or macOS (WSL or a `node:22` container will do), never
+   on Windows: npm packs every file there without the executable bit, so the
+   macOS and Linux binaries would install but refuse to run. That is what
+   happened to 0.4.1.
+
 2. On npmjs.com, open each of the six packages → Settings → Trusted Publisher →
    GitHub Actions: owner `NYLONXD`, repository `EnvByte_CLI`, workflow
    `release.yml`.

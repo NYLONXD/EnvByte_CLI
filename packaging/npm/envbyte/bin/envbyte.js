@@ -5,6 +5,7 @@
 "use strict";
 
 const { spawnSync } = require("node:child_process");
+const { chmodSync } = require("node:fs");
 
 const PACKAGES = {
   "darwin arm64": "@nylonxd/envbyte-darwin-arm64",
@@ -33,9 +34,22 @@ try {
   process.exit(1);
 }
 
-const result = spawnSync(binary, process.argv.slice(2), { stdio: "inherit", windowsHide: false });
+const run = () => spawnSync(binary, process.argv.slice(2), { stdio: "inherit", windowsHide: false });
+let result = run();
+
+// A package packed on Windows loses the executable bit, so the binary can
+// arrive as 0644. Put the bit back and try once more.
+if (result.error?.code === "EACCES" && process.platform !== "win32") {
+  try {
+    chmodSync(binary, 0o755);
+    result = run();
+  } catch {
+    // Not ours to change, e.g. installed with sudo; the hint below covers it.
+  }
+}
 if (result.error) {
   console.error(`envbyte: could not start ${binary}: ${result.error.message}`);
+  if (result.error.code === "EACCES") console.error(`Make it executable: sudo chmod +x ${binary}`);
   process.exit(1);
 }
 if (result.signal) {
