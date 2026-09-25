@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  envbyte.msi: the Windows installer behind the website's Download button and
+  its `msiexec /i` command. build.ps1 next to this file builds it.
+
+  It installs envbyte.exe for the current user only, into
+  %LOCALAPPDATA%\Programs\Envbyte, and adds that folder to the user PATH, so it
+  never needs administrator rights. Uninstalling from Settings > Apps removes
+  both. Installing a newer version replaces the old one in place.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <!-- Never change the UpgradeCode: it is how a new version finds and
+       replaces the one already installed. -->
+  <Package
+    Name="Envbyte"
+    Manufacturer="Envbyte"
+    Version="$(Version)"
+    UpgradeCode="29E2EF15-E2AE-4A93-B2BA-2FC731C9F869"
+    Scope="perUser"
+    Language="1033">
+    <SummaryInformation Description="Envbyte command-line tool" />
+
+    <MajorUpgrade
+      AllowSameVersionUpgrades="yes"
+      DowngradeErrorMessage="A newer version of Envbyte is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <!-- Settings > Apps -->
+    <Icon Id="EnvbyteIcon" SourceFile="$(sys.SOURCEFILEDIR)envbyte.ico" />
+    <Property Id="ARPPRODUCTICON" Value="EnvbyteIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://envbyte.trackedge.in" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/NYLONXD/EnvByte_CLI/issues" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Envbyte" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Envbyte">
+      <!-- A fixed Guid, like the UpgradeCode: it stays the same in every version. -->
+      <Component Id="EnvbyteExe" Directory="INSTALLFOLDER" Guid="27545A9E-F78B-4878-9BBA-E5810496A920">
+        <File Id="EnvbyteExe" Source="$(Binary)" Name="envbyte.exe" />
+        <!-- Files in a user's profile cannot be a component's key path, so
+             Windows Installer tracks this registry value instead. -->
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\Envbyte"
+          Name="InstallDir"
+          Type="string"
+          Value="[INSTALLFOLDER]"
+          KeyPath="yes" />
+        <Environment
+          Id="UserPath"
+          Name="PATH"
+          Value="[INSTALLFOLDER]"
+          Part="last"
+          Action="set"
+          System="no"
+          Permanent="no" />
+        <!-- Only ever removed when empty. -->
+        <RemoveFolder Id="RemoveInstallFolder" Directory="INSTALLFOLDER" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+      </Component>
+    </Feature>
+
+    <!-- Welcome, Install, Finish. The stock minimal dialog set asks the user to
+         accept a licence agreement first, which an MIT/Apache tool has no
+         business doing. -->
+    <UI Id="EnvbyteUI">
+      <TextStyle Id="WixUI_Font_Normal" FaceName="Tahoma" Size="8" />
+      <TextStyle Id="WixUI_Font_Bigger" FaceName="Tahoma" Size="12" />
+      <TextStyle Id="WixUI_Font_Title" FaceName="Tahoma" Size="9" Bold="yes" />
+      <Property Id="DefaultUIFont" Value="WixUI_Font_Normal" />
+      <Property Id="WixUI_Mode" Value="Minimal" />
+
+      <DialogRef Id="ErrorDlg" />
+      <DialogRef Id="FatalError" />
+      <DialogRef Id="FilesInUse" />
+      <DialogRef Id="MsiRMFilesInUse" />
+      <DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ProgressDlg" />
+      <DialogRef Id="ResumeDlg" />
+      <DialogRef Id="UserExit" />
+      <DialogRef Id="WelcomeDlg" />
+
+      <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="1" Condition="NOT Installed" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="MaintenanceTypeDlg" Order="2" Condition="Installed" />
+
+      <Publish Dialog="MaintenanceWelcomeDlg" Control="Next" Event="NewDialog" Value="MaintenanceTypeDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RepairButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="RemoveButton" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="MaintenanceTypeDlg" Control="Back" Event="NewDialog" Value="MaintenanceWelcomeDlg" />
+
+      <Publish Dialog="ExitDialog" Control="Finish" Event="EndDialog" Value="Return" Order="999" />
+    </UI>
+    <UIRef Id="WixUI_Common" />
+
+    <Property
+      Id="WIXUI_EXITDIALOGOPTIONALTEXT"
+      Value="Envbyte is installed. Open a new terminal and run: envbyte register" />
+  </Package>
+</Wix>

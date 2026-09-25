@@ -7,7 +7,7 @@ function detectDefaultMethod(): string {
   const platform =
     (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
     navigator.userAgent;
-  return /win/i.test(platform) ? "powershell" : "sh";
+  return /win/i.test(platform) ? "msi" : "sh";
 }
 
 async function copyText(text: string): Promise<boolean> {

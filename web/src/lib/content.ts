@@ -3,8 +3,8 @@
 export const SITE_URL = "https://envbyte.trackedge.in";
 export const REPO_URL = "https://github.com/NYLONXD/EnvByte_CLI";
 export const API_STATUS_URL = "https://api.envbyte.trackedge.in/health/ready";
-/** The Windows installer (installer/ in the repo), attached to every release. */
-export const WINDOWS_SETUP_URL = `${REPO_URL}/releases/latest/download/envbyte-setup.exe`;
+/** The Windows installer (packaging/msi in the repo), attached to every release. */
+export const WINDOWS_MSI_URL = `${REPO_URL}/releases/latest/download/envbyte.msi`;
 
 export type Shell = "sh" | "powershell";
 
@@ -25,13 +25,21 @@ export const INSTALL_METHODS: InstallMethod[] = [
     note: "Installs to ~/.envbyte/bin and checks the download's SHA-256 first.",
   },
   {
-    id: "powershell",
+    id: "msi",
     label: "Windows",
+    // msiexec downloads the installer itself and follows GitHub's redirects.
+    command: `msiexec /i ${WINDOWS_MSI_URL}`,
+    shell: "powershell",
+    note: "Opens the Envbyte installer. Per-user, so no administrator rights needed.",
+  },
+  {
+    id: "powershell",
+    label: "PowerShell",
     // Wrapped in `powershell -c` so it runs the same from Command Prompt,
     // PowerShell or Windows Terminal; bare `irm` exists only in PowerShell.
     command: `powershell -c "irm ${SITE_URL}/install.ps1 | iex"`,
     shell: "powershell",
-    note: "Works in Command Prompt or PowerShell. No administrator rights needed.",
+    note: "Installs to ~\\.envbyte\\bin without an installer window. No administrator rights needed.",
   },
   {
     id: "npm",

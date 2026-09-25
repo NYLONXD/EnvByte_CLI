@@ -103,7 +103,7 @@ jobs:
       - run: cargo test --workspace --locked
 
   build:
-    needs: verify
+    needs: [plan, verify]
     strategy:
       fail-fast: false
       matrix:
@@ -143,12 +143,14 @@ jobs:
 
       - run: cargo build --release --locked -p envbyte --target ${{ matrix.target }}
 
-      # envbyte-setup.exe, behind the website's Download button. It downloads
-      # whichever release is latest, so it ships beside the archives rather
-      # than inside one.
+      # envbyte.msi, behind the website's Download button and its
+      # `msiexec /i` command. It carries this build's envbyte.exe.
       - name: Build the Windows installer
         if: matrix.os == 'windows-latest'
-        run: cargo build --release --locked -p envbyte-setup --target ${{ matrix.target }}
+        shell: pwsh
+        run: >-
+          packaging/msi/build.ps1 -Version ${{ needs.plan.outputs.version }}
+          -Binary target/${{ matrix.target }}/release/envbyte.exe -Out envbyte.msi
 
       # One archive per target, laid out so `cargo binstall` and the install
       # script can both find the binary at a predictable path.
@@ -173,8 +175,7 @@ jobs:
           cp README.md LICENSE-MIT LICENSE-APACHE "dist/$name/"
           (cd dist && 7z a "../$name.zip" "$name")
           sha256sum "$name.zip" > "$name.zip.sha256"
-          cp "target/${{ matrix.target }}/release/envbyte-setup.exe" envbyte-setup.exe
-          sha256sum envbyte-setup.exe > envbyte-setup.exe.sha256
+          sha256sum envbyte.msi > envbyte.msi.sha256
 
       - uses: actions/upload-artifact@v4
         with:
@@ -184,8 +185,8 @@ jobs:
             envbyte-*.tar.gz.sha256
             envbyte-*.zip
             envbyte-*.zip.sha256
-            envbyte-setup.exe
-            envbyte-setup.exe.sha256
+            envbyte.msi
+            envbyte.msi.sha256
           if-no-files-found: error
 
   release:

@@ -12,12 +12,11 @@ every archive and its `.sha256`, and pushes to each channel below that is
 switched on. The install scripts on the website always fetch the latest
 release, so they need no update.
 
-Each release also carries `envbyte-setup.exe`, the Windows installer built from
-`installer/`. The website's Download button links to
-`releases/latest/download/envbyte-setup.exe`, so the button only works once a
-release made by this workflow exists. Like the install scripts, the installer
-downloads whichever release is latest, so it has its own version in
-`installer/Cargo.toml` that does not need bumping with the CLI.
+Each release also carries `envbyte.msi`, the Windows installer, built from
+`msi/` around that release's `envbyte.exe`. The website's Download button and
+its `msiexec /i` command both link to `releases/latest/download/envbyte.msi`,
+so they only work once a release made by this workflow exists. The MSI takes
+its version from `cli/Cargo.toml`, and installing a newer one replaces the old.
 
 Do not tag or `cargo publish` by hand (past the one-time first publish under
 crates.io below): the release creates the tag, and publishing to crates.io on
@@ -35,6 +34,8 @@ nothing.
 | `npm/envbyte/` | The `envbyte` npm package: a small launcher that runs the platform binary |
 | `npm/build.mjs` | Builds the launcher and the five `@nylonxd/envbyte-*` platform packages from a release's archives |
 | `render.py` | Writes the Homebrew formula, Scoop manifest and winget manifests from a release's checksums |
+| `msi/envbyte.wxs` | The Windows installer: a per-user MSI that installs `envbyte.exe` and adds it to PATH |
+| `msi/build.ps1` | Builds `envbyte.msi` with WiX (needs the .NET SDK): `pwsh packaging/msi/build.ps1 -Version 0.4.2 -Binary target/release/envbyte.exe` |
 
 ## Switching channels on
 
@@ -69,7 +70,7 @@ a package that already exists, so the first version goes up by hand:
    write to all packages and to the `nylonxd` organization:
 
    ```bash
-   node packaging/npm/build.mjs v0.4.1 <archives folder> npm-out
+   node packaging/npm/build.mjs v0.4.2 <archives folder> npm-out
    for dir in npm-out/cli-* npm-out/envbyte; do (cd "$dir" && npm publish --access public); done
    ```
 
@@ -96,7 +97,7 @@ Users then install with `brew install nylonxd/tap/envbyte`, or
 Microsoft reviews every new package, so the first version goes in by hand:
 
 1. After the release exists, download its `.sha256` files into a folder and run
-   `python3 packaging/render.py v0.4.1 <that folder> out`.
+   `python3 packaging/render.py v0.4.2 <that folder> out`.
 2. Fork `microsoft/winget-pkgs`, copy `out/winget/manifests` into the fork, and
    open a pull request. `winget validate --manifest <folder>` checks the files
    first; `wingetcreate submit <folder>` does the fork and pull request for you.

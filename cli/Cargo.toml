@@ -1,6 +1,6 @@
 [package]
 name = "envbyte"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 description = "Share .env files across a team with end-to-end encryption and rotatable keys"
 authors = ["Envbyte"]

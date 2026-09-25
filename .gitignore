@@ -1,4 +1,5 @@
 /target
+*.msi
 .envbyte
 .envbyte-logs
 .env

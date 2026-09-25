@@ -29,17 +29,22 @@ curl -fsSL https://envbyte.trackedge.in/install.sh | sh
 Windows (Command Prompt or PowerShell):
 
 ```powershell
+msiexec /i https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte.msi
+```
+
+That opens the installer for
+[envbyte.msi](https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte.msi),
+which you can also download and double-click. It installs for your user only,
+into `%LOCALAPPDATA%\Programs\Envbyte`, adds that folder to your PATH, and is
+removed from Settings > Apps. To install without the installer window:
+
+```powershell
 powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"
 ```
 
-Or, on Windows, download
-[envbyte-setup.exe](https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte-setup.exe)
-and double-click it. It opens a terminal window, shows what it will install and
-where, and asks before changing anything.
-
-All of these download the release for your platform from GitHub, check it
-against its published SHA-256 before installing, and need no admin rights.
-To build from source instead (Rust 1.88+):
+None of these need admin rights. The install scripts download the release for
+your platform from GitHub and check it against its published SHA-256 before
+installing. To build from source instead (Rust 1.88+):
 
 ```bash
 cargo install envbyte
@@ -357,9 +362,8 @@ server/src/
   migrations/     database schema
 web/              envbyte.trackedge.in: Vite + React + Tailwind + GSAP,
   public/         served as-is, including install.sh and install.ps1
-installer/        envbyte-setup.exe, the Windows installer the website's
-                  Download button serves
-packaging/        npm packages and the Homebrew, Scoop and winget recipes
+packaging/        npm packages, the Windows installer (msi/) and the
+                  Homebrew, Scoop and winget recipes
 ```
 
 [`packaging/README.md`](packaging/README.md) covers cutting a release and

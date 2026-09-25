@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "server", "installer"]
+members = ["cli", "server"]
 # `cargo run` from the repo root runs the CLI; use `-p envbyte-server` for the API.
 default-members = ["cli"]
 resolver = "2"
