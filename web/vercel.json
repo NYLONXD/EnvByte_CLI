@@ -3,8 +3,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "cleanUrls": true,
   "trailingSlash": false,
+  "redirects": [{ "source": "/about.html", "destination": "/about", "permanent": true }],
+  "rewrites": [{ "source": "/about", "destination": "/about.html" }],
   "headers": [
     {
       "source": "/install.sh",
