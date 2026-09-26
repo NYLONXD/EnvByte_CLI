@@ -9,12 +9,13 @@ interface Stop {
   body: ReactNode;
 }
 
-// Each step sits directly under the part of the diagram it describes.
+// Each step sits directly under the part of the diagram it describes. The
+// copy says where the file can be read, not how it is locked.
 const STOPS: Stop[] = [
   {
     title: "Encrypted on your laptop",
     sealed: false,
-    diagram: { name: "Your laptop", detail: ".env → AES-256-GCM", note: "plaintext stays here" },
+    diagram: { name: "Your laptop", detail: ".env → encrypted", note: "readable here" },
     body: (
       <>
         <code className="chip">envbyte push</code> encrypts the whole file before it leaves your machine, variable
@@ -25,14 +26,14 @@ const STOPS: Stop[] = [
   {
     title: "Stored as noise",
     sealed: true,
-    diagram: { name: "Envbyte server", detail: "ciphertext + sealed keys", note: "holds no key to open them" },
-    body: "The server keeps the ciphertext and one sealed copy of the project key per member. A leaked database gives an attacker nothing to read.",
+    diagram: { name: "Envbyte server", detail: "encrypted files only", note: "can't open what it stores" },
+    body: "The server keeps your files in a form it can't read, so a leaked database gives an attacker nothing.",
   },
   {
-    title: "Opened with their own key",
+    title: "Opened only by your team",
     sealed: false,
-    diagram: { name: "Teammate", detail: "sealed key → .env", note: "opens their own copy" },
-    body: "Each copy of the project key is sealed to one person's X25519 identity. Inviting someone seals a copy for them, so nothing gets pasted into chat.",
+    diagram: { name: "Teammate", detail: "encrypted → .env", note: "readable on their laptop" },
+    body: "Only the people you invite can open the file, each on their own machine, so nothing gets pasted into chat.",
   },
 ];
 
@@ -42,8 +43,8 @@ const NODE_WIDTH = 220;
 const NODE_GAP = 120;
 const nodeX = (index: number) => index * (NODE_WIDTH + NODE_GAP);
 const LINKS = [
-  { from: nodeX(0) + NODE_WIDTH + 8, to: nodeX(1) - 8, label: "ciphertext" },
-  { from: nodeX(1) + NODE_WIDTH + 8, to: nodeX(2) - 8, label: "sealed key" },
+  { from: nodeX(0) + NODE_WIDTH + 8, to: nodeX(1) - 8, label: "push" },
+  { from: nodeX(1) + NODE_WIDTH + 8, to: nodeX(2) - 8, label: "pull" },
 ];
 
 function FlowDiagram() {
@@ -51,8 +52,8 @@ function FlowDiagram() {
     <svg viewBox="0 0 900 150" className="hidden w-full overflow-visible sm:block" role="img" aria-labelledby="flow-title flow-desc">
       <title id="flow-title">How a .env file travels through Envbyte</title>
       <desc id="flow-desc">
-        Your laptop encrypts the file and uploads only ciphertext. The server stores ciphertext and one sealed copy of
-        the project key per member. A teammate's laptop opens its own sealed copy and decrypts the file.
+        Your laptop encrypts the file and pushes it to the Envbyte server, which stores it but cannot read it. A
+        teammate you invited pulls it and opens it on their own laptop.
       </desc>
       <defs>
         <marker id="flow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
@@ -116,7 +117,7 @@ export function HowItWorks() {
   const scope = useRef<HTMLElement>(null);
 
   // Motion that explains: the dashes march the way data flows, and a packet
-  // of ciphertext crosses each link, only while the diagram is on screen.
+  // of encrypted data crosses each link, only while the diagram is on screen.
   useGSAP(
     () => {
       const mm = gsap.matchMedia();

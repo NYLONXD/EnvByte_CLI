@@ -2,6 +2,7 @@ import { API_STATUS_URL, REPO_URL } from "../lib/content";
 import { Wordmark } from "./Logo";
 
 const LINKS = [
+  { href: "/about", label: "About" },
   { href: REPO_URL, label: "GitHub" },
   { href: `${REPO_URL}/blob/main/SECURITY.md`, label: "Security" },
   { href: `${REPO_URL}/releases`, label: "Releases" },
@@ -22,7 +23,14 @@ export function Footer() {
             </a>
           ))}
         </nav>
-        <p className="sm:ml-auto">© {new Date().getFullYear()} Envbyte</p>
+        {/* The year is baked in when the page is prerendered; the browser may
+            disagree right after New Year. */}
+        <p className="sm:ml-auto" suppressHydrationWarning>
+          © {new Date().getFullYear()} Envbyte, built by{" "}
+          <a href="/about" className="text-fg hover:text-plain">
+            Himanshu Jha
+          </a>
+        </p>
       </div>
     </footer>
   );

@@ -36,6 +36,23 @@
   --color-term-line: rgb(213 227 222 / 0.1);
   --color-term-fg: #d5e3de;
   --color-term-muted: #7e9793;
+
+  /* The guilloché turns about once every four minutes: movement you notice
+     only when you look for it. */
+  --animate-drift: drift 240s linear infinite;
+  --animate-fade-in: fade-in 1.4s ease-out both;
+
+  @keyframes drift {
+    to {
+      rotate: 360deg;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
 }
 
 :root {
@@ -109,6 +126,18 @@
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
+    }
+  }
+
+  /* The page ships prerendered, so without this the finished hero would show
+     for a moment before its entrance hides it and fades it back in. GSAP's
+     autoAlpha makes each one visible again; index.html has a <noscript>
+     override. */
+  @media (prefers-reduced-motion: no-preference) {
+    [data-animate="headline"],
+    [data-animate="intro"],
+    [data-animate="lens"] {
+      visibility: hidden;
     }
   }
 }

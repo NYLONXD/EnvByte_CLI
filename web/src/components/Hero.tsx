@@ -25,8 +25,8 @@ export function Hero() {
   );
 
   return (
-    <section ref={scope} className="relative isolate overflow-hidden pt-14 pb-18 sm:pt-20 sm:pb-22 lg:pt-24 lg:pb-26">
-      <Guilloche className="pointer-events-none absolute top-[-6rem] right-[-16rem] -z-10 w-[62rem] max-w-none opacity-80 sm:top-[-4rem] lg:right-[-12rem]" />
+    <section ref={scope} className="relative isolate overflow-hidden pt-30 pb-18 sm:pt-36 sm:pb-22 lg:pt-40 lg:pb-26">
+      <Guilloche className="pointer-events-none absolute top-[-2rem] right-[-16rem] -z-10 w-[62rem] max-w-none opacity-80 sm:top-0 lg:right-[-12rem]" />
       <div className="container-page">
         <h1
           data-animate="headline"
@@ -39,8 +39,8 @@ export function Hero() {
           <div data-animate="intro" className="min-w-0">
             <p className="mb-8 max-w-[34em] text-[clamp(1.06rem,1.5vw,1.18rem)] leading-relaxed text-muted">
               Envbyte syncs, versions and rolls back your team's environment files. The file is encrypted on your
-              laptop before it leaves, every teammate opens it with their own sealed key, and the server can't read a
-              single value.
+              laptop before it leaves, only the teammates you invite can open it, and the server can't read a single
+              value.
             </p>
             <InstallBox />
             <div className="mt-6">

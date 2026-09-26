@@ -1,32 +1,43 @@
 import { REPO_URL } from "../lib/content";
 import { Wordmark } from "./Logo";
 
+export type PageId = "home" | "about";
+
+// Root-relative, so the section links also work from the About page.
 const LINKS = [
-  { href: "#how", label: "How it works" },
-  { href: "#commands", label: "Commands" },
-  { href: "#self-host", label: "Self-host" },
+  { href: "/#how", label: "How it works" },
+  { href: "/#commands", label: "Commands" },
+  { href: "/#self-host", label: "Self-host" },
+  { href: "/about", label: "About", page: "about" },
   { href: REPO_URL, label: "GitHub" },
 ];
 
-export function Header() {
+/** A pill that floats over the top of the page, centred. */
+export function Header({ current }: { current: PageId }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-line bg-page/85 backdrop-blur-md backdrop-saturate-150">
-      <div className="container-page flex h-16 items-center gap-6">
-        <a href="/" aria-label="Envbyte home" className="text-[1.05rem]">
-          <Wordmark size={28} />
+    <header className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center px-4 pt-3 sm:pt-4">
+      <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-line-strong bg-raised/85 py-1.5 pr-1.5 pl-4 shadow-[0_12px_32px_-12px_rgb(0_0_0/0.45)] backdrop-blur-md backdrop-saturate-150">
+        <a href="/" aria-label="Envbyte home" aria-current={current === "home" ? "page" : undefined} className="mr-3 text-[1rem]">
+          <Wordmark size={26} />
         </a>
-        <nav aria-label="Primary" className="ml-auto hidden gap-1 md:flex">
-          {LINKS.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="rounded-full px-3.5 py-2 text-[0.95rem] text-muted transition-colors hover:text-fg"
-            >
-              {link.label}
-            </a>
-          ))}
+        <nav aria-label="Primary" className="hidden md:flex">
+          {LINKS.map((link) => {
+            const active = link.page === current;
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`rounded-full px-3 py-1.5 text-[0.9rem] transition-colors lg:px-3.5 ${
+                  active ? "text-fg" : "text-muted hover:text-fg"
+                }`}
+              >
+                {link.label}
+              </a>
+            );
+          })}
         </nav>
-        <a href="#install" className="button ml-auto px-4.5 py-2 text-sm md:ml-0">
+        <a href="/#install" className="button ml-1 px-4 py-2 text-sm">
           Install
         </a>
       </div>

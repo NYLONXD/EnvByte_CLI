@@ -1,0 +1,64 @@
+# Envbyte
+
+> Envbyte is a free, open-source command-line tool for sharing .env files with a team using end-to-end encryption. A file is encrypted on your own machine before it is uploaded, only the teammates you invite can open it, and the server stores data it cannot read. Envbyte adds version history, rollback, roles, an audit log and two-command offboarding. It runs on Windows, macOS and Linux, and companies can self-host it with Docker.
+
+Envbyte is built by Himanshu Jha (GitHub: NYLONXD). It is written in Rust and dual-licensed under MIT or Apache-2.0. The hosted service is currently free.
+
+## Install
+
+- macOS and Linux: `curl -fsSL https://envbyte.trackedge.in/install.sh | sh`
+- Windows installer: `msiexec /i https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte.msi`
+- Windows without an installer window: `powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"`
+- npm: `npm install -g envbyte`
+- Homebrew: `brew install nylonxd/tap/envbyte`
+- winget: `winget install Envbyte.Envbyte`
+- Cargo (builds from source, Rust 1.88 or newer): `cargo install envbyte`
+
+None of the installers need administrator rights.
+
+## Quick start
+
+1. Create an account: `envbyte register`
+2. Start a project in your app's folder: `envbyte create payments-api`
+3. Encrypt and upload your .env: `envbyte push -m "first version"`
+4. Invite a teammate: `envbyte add priya@company.com`
+5. They join and pull it down: `envbyte init && envbyte pull`
+
+## Commands
+
+- `envbyte push` / `envbyte pull`: upload or download the project's encrypted .env.
+- `envbyte logs --remote`: list every pushed version.
+- `envbyte rollback --address <commit>`: roll the server, or only your local copy, back to an earlier version.
+- `envbyte add <email>`: invite a teammate. Only that person's account can accept the invitation.
+- `envbyte role <user-id> <role>`: set a member's role to owner, admin, member or viewer.
+- `envbyte audit`: show who pushed, pulled, invited and rotated, per project.
+- `envbyte remove <user-id>` then `envbyte rotate`: offboard someone. Rotating re-encrypts every file, so anything they kept can't open new versions.
+- `envbyte status`, `envbyte whoami`, `envbyte members`, `envbyte projects`: inspect the current state.
+
+## Common questions
+
+### What is Envbyte?
+A command-line tool that syncs a team's .env files through a server that cannot read them. It works like a small, encrypted version control system for environment files.
+
+### Can the Envbyte server read my secrets?
+No. Files are encrypted on your machine before upload and can only be opened by teammates you invite. The server stores encrypted data only, so a leaked database exposes nothing readable.
+
+### Is Envbyte free?
+Yes. The CLI and server are open source under MIT or Apache-2.0, and the hosted service is currently free.
+
+### Can I host Envbyte myself?
+Yes. The API ships as a Docker container with its own Postgres. Run `docker compose up -d` on your server and point every laptop at it with `ENVBYTE_SERVER=https://envbyte.your-company.com`.
+
+### Does Envbyte work in CI?
+Yes. Give each pipeline its own access with `ENVBYTE_IDENTITY_KEY` and run `envbyte pull`. You revoke a pipeline the same way you remove a teammate.
+
+### How is this better than pasting .env files into chat?
+Secrets pasted into chat or email stay in message history and can be forwarded. With Envbyte, the file only ever travels encrypted, invitations can't be forwarded, every change is versioned, and removing someone takes two commands.
+
+## Links
+
+- [Website](https://envbyte.trackedge.in/)
+- [About Himanshu Jha](https://envbyte.trackedge.in/about)
+- [Source code](https://github.com/NYLONXD/EnvByte_CLI)
+- [Releases](https://github.com/NYLONXD/EnvByte_CLI/releases)
+- [Security policy](https://github.com/NYLONXD/EnvByte_CLI/blob/main/SECURITY.md)

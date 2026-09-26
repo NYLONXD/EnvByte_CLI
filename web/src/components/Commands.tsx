@@ -12,7 +12,7 @@ const ENTRIES: Entry[] = [
   {
     commands: ["envbyte add priya@company.com"],
     title: "Invitations that can't be forwarded",
-    body: "The project key is sealed to Priya's own identity. Forward the email to anyone else and it gives them nothing.",
+    body: "Only Priya's own account can accept it. Forward the email to anyone else and it gives them nothing.",
   },
   {
     commands: ["envbyte logs --remote", "envbyte rollback --address <commit>"],
@@ -32,7 +32,7 @@ const ENTRIES: Entry[] = [
   {
     commands: ["envbyte remove <user-id>", "envbyte rotate"],
     title: "Offboarding in two commands",
-    body: "Rotation mints a new project key and re-encrypts every file. The copy a departing member kept opens nothing new.",
+    body: "Rotating re-encrypts every file, so anything a departing member kept can't open what comes next.",
   },
 ];
 

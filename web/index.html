@@ -6,22 +6,100 @@
     <title>Envbyte · End-to-end encrypted .env sharing for teams</title>
     <meta
       name="description"
-      content="Share .env files with your team without sharing the secrets. Envbyte encrypts on your laptop, seals a key for every teammate, and keeps versioned history. The server never sees a value."
+      content="Share .env files with your team without sharing the secrets. Envbyte encrypts on your laptop, lets only the teammates you invite open the file, and keeps versioned history. The server never sees a value."
     />
+    <meta name="author" content="Himanshu Jha" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
     <meta name="theme-color" content="#0a191c" />
     <link rel="canonical" href="https://envbyte.trackedge.in/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="Envbyte for AI assistants" />
 
     <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Envbyte" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://envbyte.trackedge.in/" />
     <meta property="og:title" content="Envbyte · Share .env files, never the secrets" />
     <meta
       property="og:description"
-      content="End-to-end encrypted .env sharing for teams. Per-member sealed keys, versioned history, one-command offboarding."
+      content="End-to-end encrypted .env sharing for teams. Only invited teammates can open your files, with versioned history and one-command offboarding."
     />
     <meta property="og:image" content="https://envbyte.trackedge.in/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Envbyte: share .env files, never the secrets" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Envbyte · Share .env files, never the secrets" />
+    <meta
+      name="twitter:description"
+      content="End-to-end encrypted .env sharing for teams. Only invited teammates can open your files, with versioned history and one-command offboarding."
+    />
+    <meta name="twitter:image" content="https://envbyte.trackedge.in/og.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://envbyte.trackedge.in/#website",
+            "url": "https://envbyte.trackedge.in/",
+            "name": "Envbyte",
+            "description": "End-to-end encrypted .env file sharing for teams.",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://envbyte.trackedge.in/about#person" }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://envbyte.trackedge.in/#software",
+            "name": "Envbyte",
+            "url": "https://envbyte.trackedge.in/",
+            "image": "https://envbyte.trackedge.in/og.png",
+            "description": "Envbyte is a free, open-source command-line tool that syncs, versions and rolls back a team's .env files with end-to-end encryption. Files are encrypted on your own machine before they are uploaded, only the teammates you invite can open them, and the server stores data it cannot read.",
+            "applicationCategory": "DeveloperApplication",
+            "applicationSubCategory": "Secrets management",
+            "operatingSystem": "Windows, macOS, Linux",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "license": ["https://opensource.org/license/mit", "https://www.apache.org/licenses/LICENSE-2.0"],
+            "downloadUrl": "https://github.com/NYLONXD/EnvByte_CLI/releases/latest",
+            "installUrl": "https://envbyte.trackedge.in/#install",
+            "featureList": [
+              "End-to-end encrypted .env sync",
+              "Version history and rollback",
+              "Team invitations with owner, admin, member and viewer roles",
+              "Audit log of pushes, pulls, invites and rotations",
+              "Separate access for CI pipelines",
+              "Offboarding in two commands",
+              "Self-hosting with Docker"
+            ],
+            "author": { "@id": "https://envbyte.trackedge.in/about#person" },
+            "sameAs": ["https://github.com/NYLONXD/EnvByte_CLI"]
+          },
+          {
+            "@type": "SoftwareSourceCode",
+            "@id": "https://envbyte.trackedge.in/#source",
+            "name": "Envbyte",
+            "codeRepository": "https://github.com/NYLONXD/EnvByte_CLI",
+            "programmingLanguage": "Rust",
+            "license": "https://opensource.org/license/mit",
+            "targetProduct": { "@id": "https://envbyte.trackedge.in/#software" },
+            "author": { "@id": "https://envbyte.trackedge.in/about#person" }
+          },
+          {
+            "@type": "Person",
+            "@id": "https://envbyte.trackedge.in/about#person",
+            "name": "Himanshu Jha",
+            "url": "https://envbyte.trackedge.in/about",
+            "image": "https://envbyte.trackedge.in/himanshu-jha.jpg",
+            "sameAs": ["https://github.com/NYLONXD"]
+          }
+        ]
+      }
+    </script>
+    <noscript><style>[data-animate] { visibility: visible !important; }</style></noscript>
   </head>
   <body>
     <div id="root"></div>

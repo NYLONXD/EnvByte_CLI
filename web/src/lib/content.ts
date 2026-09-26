@@ -3,6 +3,7 @@
 export const SITE_URL = "https://envbyte.trackedge.in";
 export const REPO_URL = "https://github.com/NYLONXD/EnvByte_CLI";
 export const API_STATUS_URL = "https://api.envbyte.trackedge.in/health/ready";
+export const AUTHOR_GITHUB_URL = "https://github.com/NYLONXD";
 /** The Windows installer (packaging/msi in the repo), attached to every release. */
 export const WINDOWS_MSI_URL = `${REPO_URL}/releases/latest/download/envbyte.msi`;
 
@@ -85,12 +86,12 @@ export type TerminalLine =
 /** The hero's example session. */
 export const TERMINAL_SCRIPT: TerminalLine[] = [
   { kind: "command", text: "envbyte create payments-api" },
-  { kind: "success", text: "✓ Created payments-api, key sealed to your identity" },
+  { kind: "success", text: "✓ Created payments-api" },
   { kind: "command", text: 'envbyte push -m "add stripe keys"' },
-  { kind: "output", text: "  encrypting .env with project key v1" },
-  { kind: "success", text: "✓ Pushed version 3. The server only sees ciphertext" },
+  { kind: "output", text: "  encrypting .env on this machine" },
+  { kind: "success", text: "✓ Pushed version 3. The server can't read it" },
   { kind: "command", text: "envbyte add priya@company.com" },
-  { kind: "success", text: "✓ Invited priya@company.com (sealed to 3f9a-1c07)" },
+  { kind: "success", text: "✓ Invited priya@company.com" },
   { kind: "comment", text: "# meanwhile, on Priya's laptop" },
   { kind: "command", text: "envbyte init && envbyte pull" },
   { kind: "success", text: "✓ Decrypted .env · 14 variables" },

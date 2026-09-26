@@ -1,0 +1,6 @@
+# Search engines and AI assistants are welcome to read and cite this site.
+# A summary written for language models lives at /llms.txt.
+User-agent: *
+Allow: /
+
+Sitemap: https://envbyte.trackedge.in/sitemap.xml
