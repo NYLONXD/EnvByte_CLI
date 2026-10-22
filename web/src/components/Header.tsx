@@ -1,12 +1,12 @@
 import { REPO_URL } from "../lib/content";
 import { Wordmark } from "./Logo";
 
-export type PageId = "home" | "about";
+export type PageId = "home" | "about" | "docs";
 
-// Root-relative, so the section links also work from the About page.
+// Root-relative, so the section links also work from the other pages.
 const LINKS = [
   { href: "/#how", label: "How it works" },
-  { href: "/#commands", label: "Commands" },
+  { href: "/docs", label: "Docs", page: "docs" },
   { href: "/#self-host", label: "Self-host" },
   { href: "/about", label: "About", page: "about" },
   { href: REPO_URL, label: "GitHub" },

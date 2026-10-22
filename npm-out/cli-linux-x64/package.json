@@ -1,0 +1,21 @@
+{
+  "name": "@nylonxd/envbyte-linux-x64",
+  "version": "0.5.0",
+  "description": "The envbyte binary for linux x64. Install `envbyte` instead of this package.",
+  "license": "MIT OR Apache-2.0",
+  "homepage": "https://envbyte.trackedge.in",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NYLONXD/EnvByte_CLI.git"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin/envbyte"
+  ],
+  "preferUnplugged": true
+}

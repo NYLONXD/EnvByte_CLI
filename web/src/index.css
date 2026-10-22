@@ -151,6 +151,33 @@
     @apply text-[clamp(1.55rem,3.1vw,2.3rem)] leading-[1.15];
   }
 
+  /* Running text on the docs page: even spacing between whatever it holds,
+     paragraphs, lists, code panels and tables alike. */
+  .docs-prose {
+    @apply grid gap-4 text-[1rem] leading-[1.75];
+  }
+
+  .docs-prose h3 {
+    @apply mt-3 text-[1.06rem];
+  }
+
+  .docs-prose ul,
+  .docs-prose ol {
+    @apply grid gap-2 pl-5 marker:text-muted;
+  }
+
+  .docs-prose ul {
+    @apply list-disc;
+  }
+
+  .docs-prose ol {
+    @apply list-decimal;
+  }
+
+  .docs-prose a:not(.button) {
+    @apply font-medium text-plain underline decoration-plain/35 underline-offset-4 hover:decoration-plain;
+  }
+
   /* Inline code in prose. */
   .chip {
     @apply rounded-md bg-plain-soft px-1.5 py-0.5 font-mono text-[0.8em] whitespace-nowrap text-plain;

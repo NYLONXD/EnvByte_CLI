@@ -4,8 +4,14 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "trailingSlash": false,
-  "redirects": [{ "source": "/about.html", "destination": "/about", "permanent": true }],
-  "rewrites": [{ "source": "/about", "destination": "/about.html" }],
+  "redirects": [
+    { "source": "/about.html", "destination": "/about", "permanent": true },
+    { "source": "/docs.html", "destination": "/docs", "permanent": true }
+  ],
+  "rewrites": [
+    { "source": "/about", "destination": "/about.html" },
+    { "source": "/docs", "destination": "/docs.html" }
+  ],
   "headers": [
     {
       "source": "/install.sh",

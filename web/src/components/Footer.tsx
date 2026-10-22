@@ -2,6 +2,7 @@ import { API_STATUS_URL, REPO_URL } from "../lib/content";
 import { Wordmark } from "./Logo";
 
 const LINKS = [
+  { href: "/docs", label: "Docs" },
   { href: "/about", label: "About" },
   { href: REPO_URL, label: "GitHub" },
   { href: `${REPO_URL}/blob/main/SECURITY.md`, label: "Security" },

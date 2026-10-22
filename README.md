@@ -2,7 +2,7 @@
 
 # Envbyte
 
-**[envbyte.trackedge.in](https://envbyte.trackedge.in)**
+**[envbyte.trackedge.in](https://envbyte.trackedge.in)** · [Docs](https://envbyte.trackedge.in/docs)
 
 Envbyte is an end-to-end encrypted `.env` manager for teams. It gives environment files versioned history, rollback, invitations, roles and an audit trail, without any secret ever reaching the server and without anyone having to send a key to anyone.
 

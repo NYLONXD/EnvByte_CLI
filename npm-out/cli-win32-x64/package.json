@@ -1,0 +1,22 @@
+{
+  "name": "@nylonxd/envbyte-win32-x64",
+  "version": "0.5.0",
+  "description": "The envbyte binary for win32 x64. Install `envbyte` instead of this package.",
+  "license": "MIT OR Apache-2.0",
+  "homepage": "https://envbyte.trackedge.in",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NYLONXD/EnvByte_CLI.git"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/envbyte.exe"
+  ],
+  "preferUnplugged": true
+}
