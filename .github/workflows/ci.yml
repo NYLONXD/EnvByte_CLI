@@ -67,6 +67,28 @@ jobs:
         shell: pwsh
         run: packaging/msi/build.ps1 -Version 0.0.0 -Binary target/debug/envbyte.exe -Out envbyte.msi
 
+  # The same for the macOS installer. Both architectures, so the universal
+  # binary step is exercised too.
+  pkg:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          cargo build --locked -p envbyte --target x86_64-apple-darwin
+          cargo build --locked -p envbyte --target aarch64-apple-darwin
+      - name: Build envbyte.pkg
+        run: |
+          sh packaging/macos/build.sh 0.0.0 \
+            target/x86_64-apple-darwin/debug/envbyte \
+            target/aarch64-apple-darwin/debug/envbyte \
+            envbyte.pkg
+          pkgutil --expand-full envbyte.pkg expanded
+          lipo "$(find expanded -path '*usr/local/bin/envbyte' -type f)" -verify_arch x86_64 arm64
+
   # Proves the minimum supported Rust version in Cargo.toml is still accurate.
   msrv:
     runs-on: ubuntu-latest
@@ -92,7 +114,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npm run build
-      - run: shellcheck -s sh public/install.sh
+      - run: shellcheck -s sh public/install.sh ../packaging/macos/build.sh
       - name: Parse install.ps1
         shell: pwsh
         run: |

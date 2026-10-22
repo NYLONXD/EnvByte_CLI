@@ -26,6 +26,11 @@ macOS and Linux:
 curl -fsSL https://envbyte.trackedge.in/install.sh | sh
 ```
 
+On a Mac you can instead download
+[envbyte.pkg](https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte.pkg)
+and double-click it. It installs `envbyte` into `/usr/local/bin` for Apple
+silicon and Intel Macs alike, and asks for your password to do so.
+
 Windows (Command Prompt or PowerShell):
 
 ```powershell
@@ -42,7 +47,7 @@ removed from Settings > Apps. To install without the installer window:
 powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"
 ```
 
-None of these need admin rights. The install scripts download the release for
+None of the Windows options or the scripts need admin rights. The install scripts download the release for
 your platform from GitHub and check it against its published SHA-256 before
 installing. To build from source instead (Rust 1.88+):
 
@@ -362,8 +367,8 @@ server/src/
   migrations/     database schema
 web/              envbyte.trackedge.in: Vite + React + Tailwind + GSAP,
   public/         served as-is, including install.sh and install.ps1
-packaging/        npm packages, the Windows installer (msi/) and the
-                  Homebrew, Scoop and winget recipes
+packaging/        npm packages, the Windows (msi/) and macOS (macos/)
+                  installers, and the Homebrew, Scoop and winget recipes
 ```
 
 [`packaging/README.md`](packaging/README.md) covers cutting a release and

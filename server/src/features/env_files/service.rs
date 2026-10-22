@@ -1,6 +1,7 @@
 //! Rules the environment-file handlers share: payload bounds, filename safety,
-//! key-version enforcement and rollback.
+//! key-version and base-commit enforcement, and rollback.
 
+use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{db::audit, error::ApiError, state::AppState};
@@ -10,17 +11,21 @@ pub const MAX_ENCRYPTED_CONTENT: usize = 16 * 1024 * 1024;
 /// Rejects content encrypted under anything but the project's current data key.
 ///
 /// After a rotation this is what stops a client that still holds the retired
-/// key from writing a file the rest of the team can no longer read.
+/// key from writing a file the rest of the team can no longer read. The
+/// project row stays share-locked until the caller commits, and a rotation
+/// locks it exclusively, so no rotation can land between this check and the
+/// write it guards.
 pub async fn verify_key_version(
-    state: &AppState,
+    transaction: &mut Transaction<'_, Postgres>,
     project_id: Uuid,
     presented: i32,
 ) -> Result<(), ApiError> {
-    let expected = sqlx::query_scalar::<_, i32>("SELECT key_version FROM projects WHERE id = $1")
-        .bind(project_id)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| ApiError::NotFound("project not found".to_string()))?;
+    let expected =
+        sqlx::query_scalar::<_, i32>("SELECT key_version FROM projects WHERE id = $1 FOR SHARE")
+            .bind(project_id)
+            .fetch_optional(&mut **transaction)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("project not found".to_string()))?;
     if presented != expected {
         return Err(ApiError::Conflict(format!(
             "this content was encrypted with project key version {presented}, but the project \
@@ -28,6 +33,24 @@ pub async fn verify_key_version(
         )));
     }
     Ok(())
+}
+
+/// Refuses a write edited from anything but the file's current commit, so a
+/// device cannot overwrite a change it never saw. `None` on either side
+/// means the file has no content yet.
+pub fn require_current_base(base: Option<Uuid>, current: Option<Uuid>) -> Result<(), ApiError> {
+    if base == current {
+        return Ok(());
+    }
+    let message = if base.is_none() {
+        "this file already exists on the server; pull it and merge your changes before pushing"
+    } else {
+        "this file has changed on the server since you last synced it; pull and merge before pushing"
+    };
+    Err(ApiError::Stale {
+        message: message.to_string(),
+        current_commit_id: current,
+    })
 }
 
 /// Accepts only a bare `.env*` filename in the project root - no directories,
@@ -91,6 +114,20 @@ pub async fn rollback_to_commit(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn accepts_only_the_current_commit_as_a_base() {
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        assert!(require_current_base(None, None).is_ok());
+        assert!(require_current_base(Some(first), Some(first)).is_ok());
+        assert!(matches!(
+            require_current_base(Some(first), Some(second)),
+            Err(ApiError::Stale { current_commit_id: Some(id), .. }) if id == second
+        ));
+        assert!(require_current_base(None, Some(first)).is_err());
+        assert!(require_current_base(Some(first), None).is_err());
+    }
 
     #[test]
     fn rejects_filename_traversal() {

@@ -17,7 +17,7 @@ use crate::{
     features::{
         env_files::service::{validate_filename, MAX_ENCRYPTED_CONTENT},
         keys::{
-            dto::{RotateRequest, RotateResponse},
+            dto::{RotateRequest, RotateResponse, RotatedCommit},
             wrapping::validate_wrapped_key,
         },
     },
@@ -72,19 +72,21 @@ pub async fn apply(
     .await?
     .rows_affected();
 
+    let mut rotated = Vec::with_capacity(request.files.len());
     for file in &request.files {
         let file_id = files_by_name
             .get(&file.filename)
             .copied()
             .ok_or_else(|| ApiError::BadRequest("unknown file in rotation".to_string()))?;
         let version_id = Uuid::new_v4();
+        let commit_id = Uuid::new_v4();
         sqlx::query(
             "INSERT INTO env_versions
              (id, commit_id, env_file_id, encrypted_content, message, author_id, key_version)
              VALUES ($1, $2, $3, $4, $5, $6, $7)",
         )
         .bind(version_id)
-        .bind(Uuid::new_v4())
+        .bind(commit_id)
         .bind(file_id)
         .bind(&file.content)
         .bind(format!("key rotation to version {next_version}"))
@@ -99,6 +101,10 @@ pub async fn apply(
         .bind(file_id)
         .execute(&mut *transaction)
         .await?;
+        rotated.push(RotatedCommit {
+            filename: file.filename.clone(),
+            commit_id,
+        });
     }
 
     sqlx::query("UPDATE projects SET key_version = $1, updated_at = now() WHERE id = $2")
@@ -129,6 +135,7 @@ pub async fn apply(
         members_granted: request.grants.len(),
         files_reencrypted: request.files.len(),
         grants_revoked: revoked,
+        files: rotated,
     })
 }
 
@@ -183,7 +190,10 @@ async fn require_every_member_granted(
 }
 
 /// Every stored file must move to the new key, or the retired key would still
-/// open whatever was left behind. Returns the file ids keyed by filename.
+/// open whatever was left behind, and each must still be the version the
+/// client re-encrypted: a push that landed while the rotation was being
+/// prepared would otherwise be overwritten. Returns the file ids keyed by
+/// filename.
 async fn require_every_file_reencrypted(
     transaction: &mut Transaction<'_, Postgres>,
     project_id: Uuid,
@@ -215,6 +225,28 @@ async fn require_every_file_reencrypted(
             expected.len(),
             supplied.len()
         )));
+    }
+
+    // Read after the lock above, so no push can move a file past this check.
+    let current = sqlx::query_as::<_, (String, Uuid)>(
+        "SELECT f.filename, v.commit_id FROM env_files f
+         JOIN env_versions v ON v.id = f.current_version_id
+         WHERE f.project_id = $1",
+    )
+    .bind(project_id)
+    .fetch_all(&mut **transaction)
+    .await?
+    .into_iter()
+    .collect::<HashMap<_, _>>();
+    for file in &request.files {
+        if let Some(base) = file.base_commit_id {
+            if current.get(&file.filename) != Some(&base) {
+                return Err(ApiError::Conflict(format!(
+                    "{} changed while this rotation was being prepared; run the rotation again",
+                    file.filename
+                )));
+            }
+        }
     }
     Ok(stored.into_iter().map(|(id, name)| (name, id)).collect())
 }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The installer window for envbyte.pkg. build.sh fills in @VERSION@. -->
+<installer-gui-script minSpecVersion="2">
+    <title>Envbyte</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <conclusion file="conclusion.html" mime-type="text/html"/>
+    <!-- Listing arm64 keeps Apple silicon Macs from offering to install
+         Rosetta: the binary inside is universal. -->
+    <options customize="never" require-scripts="false" hostArchitectures="x86_64,arm64"/>
+    <domains enable_localSystem="true"/>
+    <allowed-os-versions>
+        <os-version min="10.13"/>
+    </allowed-os-versions>
+    <choices-outline>
+        <line choice="default">
+            <line choice="in.trackedge.envbyte"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="in.trackedge.envbyte" visible="false">
+        <pkg-ref id="in.trackedge.envbyte"/>
+    </choice>
+    <pkg-ref id="in.trackedge.envbyte" version="@VERSION@" onConclusion="none">envbyte-component.pkg</pkg-ref>
+</installer-gui-script>

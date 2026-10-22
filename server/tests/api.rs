@@ -1,5 +1,5 @@
 //! End-to-end API behaviour: collaboration, invitations, per-owner project
-//! names, and key rotation.
+//! names, key rotation, and conflicting edits from two devices.
 
 mod harness;
 
@@ -10,6 +10,8 @@ use sqlx::PgPool;
 
 const CIPHERTEXT_V1: &str = "greenbyte:v3:opaque-under-key-1";
 const CIPHERTEXT_V2: &str = "greenbyte:v3:opaque-under-key-2";
+const ALICE_EDIT: &str = "greenbyte:v3:alice-edit";
+const BOB_EDIT: &str = "greenbyte:v3:bob-edit";
 
 #[sqlx::test]
 async fn invited_collaborator_receives_a_sealed_project_key(pool: PgPool) {
@@ -456,6 +458,252 @@ async fn an_account_without_an_identity_key_cannot_be_invited(pool: PgPool) {
             .contains("has not published an identity key"),
         "{body}"
     );
+}
+
+#[sqlx::test]
+async fn a_push_edited_from_a_superseded_version_is_refused(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+    let (_, base) = current_file(&api, &alice, &project_id).await;
+
+    // Both start from the same version. Bob pushes first.
+    let (status, bobs) = api
+        .call(
+            "POST",
+            "/users/me/env",
+            Some(&bob.token),
+            edit(&project_id, BOB_EDIT, Some(&base)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{bobs}");
+
+    // Alice's edit would silently discard Bob's, so it is refused, and the
+    // response names the commit she has to merge with.
+    let (status, refused) = api
+        .call(
+            "POST",
+            "/users/me/env",
+            Some(&alice.token),
+            edit(&project_id, ALICE_EDIT, Some(&base)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(refused["code"], "stale_base");
+    assert_eq!(refused["current_commit_id"], bobs["commit_id"]);
+    let (content, current) = current_file(&api, &alice, &project_id).await;
+    assert_eq!(content, BOB_EDIT, "a refused push must write nothing");
+
+    // She can fetch the version both started from, to merge against.
+    let (status, original) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/commits/{base}"),
+            Some(&alice.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(original["content"], CIPHERTEXT_V1);
+    assert_eq!(original["commit_id"], base.as_str());
+
+    // Once merged on top of Bob's commit, her push goes through.
+    let (status, merged) = api
+        .call(
+            "POST",
+            "/users/me/env",
+            Some(&alice.token),
+            edit(&project_id, ALICE_EDIT, Some(&current)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{merged}");
+
+    // A client that thinks the file is new may not overwrite it either.
+    let (status, refused) = api
+        .call(
+            "POST",
+            "/users/me/env",
+            Some(&bob.token),
+            edit(&project_id, BOB_EDIT, None),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(refused["current_commit_id"], merged["commit_id"]);
+
+    // Clients older than the check send no base at all, and keep
+    // last-write-wins until they upgrade.
+    let mut legacy = edit(&project_id, BOB_EDIT, None);
+    legacy.as_object_mut().unwrap().remove("base_commit_id");
+    let (status, _) = api
+        .call("POST", "/users/me/env", Some(&bob.token), legacy)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[sqlx::test]
+async fn simultaneous_pushes_from_one_version_let_exactly_one_through(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+    let (_, base) = current_file(&api, &alice, &project_id).await;
+
+    let alices = edit(&project_id, ALICE_EDIT, Some(&base));
+    let bobs = edit(&project_id, BOB_EDIT, Some(&base));
+    let ((first, _), (second, _)) = tokio::join!(
+        api.call("POST", "/users/me/env", Some(&alice.token), alices),
+        api.call("POST", "/users/me/env", Some(&bob.token), bobs),
+    );
+    let mut statuses = [first, second];
+    statuses.sort();
+    assert_eq!(statuses, [StatusCode::OK, StatusCode::CONFLICT]);
+}
+
+#[sqlx::test]
+async fn a_new_file_is_pushed_with_a_null_base(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+
+    let mut first = edit(&project_id, ALICE_EDIT, None);
+    first["filename"] = json!(".env.production");
+    let (status, _) = api
+        .call("POST", "/users/me/env", Some(&alice.token), first.clone())
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // A second device creating the same file is told it already exists.
+    first["content"] = json!(BOB_EDIT);
+    let (status, refused) = api
+        .call("POST", "/users/me/env", Some(&bob.token), first)
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(refused["code"], "stale_base");
+}
+
+#[sqlx::test]
+async fn viewers_cannot_read_superseded_versions(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+    let (_, commit) = current_file(&api, &alice, &project_id).await;
+
+    let (status, _) = api
+        .call(
+            "PATCH",
+            &format!("/projects/{project_id}/collaborators/{}", bob.user_id),
+            Some(&alice.token),
+            json!({ "role": "viewer" }),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = api
+        .call(
+            "GET",
+            &format!("/projects/{project_id}/commits/{commit}"),
+            Some(&bob.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[sqlx::test]
+async fn a_rotation_refuses_to_undo_a_push_it_did_not_see(pool: PgPool) {
+    let api = Harness::new(pool).await;
+    let alice = api.account("alice").await;
+    let bob = api.account("bob").await;
+    let project_id = collaborative_project(&api, &alice, &bob).await;
+    let (_, before) = current_file(&api, &alice, &project_id).await;
+
+    // Bob pushes while Alice is re-encrypting the version she downloaded.
+    let (status, _) = api
+        .call(
+            "POST",
+            "/users/me/env",
+            Some(&bob.token),
+            edit(&project_id, BOB_EDIT, Some(&before)),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let rotation = |base: &str| {
+        json!({
+            "grants": [
+                { "user_id": alice.user_id, "wrapped_key": wrapped_for("alice", 2) },
+                { "user_id": bob.user_id, "wrapped_key": wrapped_for("bob", 2) }
+            ],
+            "files": [{ "filename": ".env", "content": CIPHERTEXT_V2, "base_commit_id": base }],
+        })
+    };
+    let (status, refused) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/key-rotations"),
+            Some(&alice.token),
+            rotation(&before),
+        )
+        .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+    let (content, current) = current_file(&api, &alice, &project_id).await;
+    assert_eq!(content, BOB_EDIT, "Bob's push survives");
+
+    // Re-run against what is current now, it goes through and reports the
+    // commit each file moved to.
+    let (status, rotated) = api
+        .call(
+            "POST",
+            &format!("/projects/{project_id}/key-rotations"),
+            Some(&alice.token),
+            rotation(&current),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{rotated}");
+    let (_, after) = current_file(&api, &alice, &project_id).await;
+    assert_eq!(rotated["files"][0]["filename"], ".env");
+    assert_eq!(rotated["files"][0]["commit_id"], after.as_str());
+}
+
+/// A push of `content` to `.env`, edited from `base` (`None` for a new file).
+fn edit(project_id: &str, content: &str, base: Option<&str>) -> Value {
+    json!({
+        "project_id": project_id,
+        "filename": ".env",
+        "content": content,
+        "message": "edit",
+        "key_version": 1,
+        "base_commit_id": base,
+    })
+}
+
+/// The ciphertext and commit id `.env` is at now.
+async fn current_file(
+    api: &Harness,
+    account: &harness::Account,
+    project_id: &str,
+) -> (String, String) {
+    let (status, files) = api
+        .call(
+            "GET",
+            &format!("/users/me/env?project_id={project_id}"),
+            Some(&account.token),
+            Value::Null,
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let file = files
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|file| file["filename"] == ".env")
+        .unwrap();
+    (
+        file["content"].as_str().unwrap().to_string(),
+        file["commit_id"].as_str().unwrap().to_string(),
+    )
 }
 
 /// Alice owns a project with one `.env` file; Bob is a member. Both hold a

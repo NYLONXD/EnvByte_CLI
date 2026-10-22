@@ -96,6 +96,7 @@ pub async fn rotate(assume_yes: bool) -> Result<(), String> {
         reencrypted.push(RotatedFile {
             filename: file.filename.clone(),
             content: encrypted.data,
+            base_commit_id: file.commit_id.clone(),
         });
     }
 
@@ -116,8 +117,21 @@ pub async fn rotate(assume_yes: bool) -> Result<(), String> {
     bar.finish_and_clear();
     let result = result?;
 
+    // A file this checkout was in sync with is still in sync: the rotation
+    // re-encrypted it without changing a line.
     let mut config = context.config;
     config.key_version = Some(result.key_version);
+    for rotated in &result.files {
+        let before = files
+            .iter()
+            .find(|file| file.filename == rotated.filename)
+            .and_then(|file| file.commit_id.as_ref());
+        if before.is_some() && config.synced_commits.get(&rotated.filename) == before {
+            config
+                .synced_commits
+                .insert(rotated.filename.clone(), rotated.commit_id.clone());
+        }
+    }
     crate::core::workspace::project_config::save(&config)?;
 
     ui::success(&format!(

@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use serde_json::json;
+use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -17,6 +18,13 @@ pub enum ApiError {
     NotFound(String),
     #[error("{0}")]
     Conflict(String),
+    /// A write edited from a version that is no longer current. Carries the
+    /// current commit, so the client can fetch it, merge and try again.
+    #[error("{message}")]
+    Stale {
+        message: String,
+        current_commit_id: Option<Uuid>,
+    },
     #[error("request timed out")]
     Timeout,
     #[error("internal server error")]
@@ -30,11 +38,21 @@ impl IntoResponse for ApiError {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::Conflict(_) => StatusCode::CONFLICT,
+            Self::Conflict(_) | Self::Stale { .. } => StatusCode::CONFLICT,
             Self::Timeout => StatusCode::REQUEST_TIMEOUT,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (status, Json(json!({ "error": self.to_string() }))).into_response()
+        let body = match &self {
+            Self::Stale {
+                current_commit_id, ..
+            } => json!({
+                "error": self.to_string(),
+                "code": "stale_base",
+                "current_commit_id": current_commit_id,
+            }),
+            _ => json!({ "error": self.to_string() }),
+        };
+        (status, Json(body)).into_response()
     }
 }
 

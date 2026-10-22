@@ -44,6 +44,10 @@ pub enum Commands {
         /// Push a specific .env* file without being asked
         #[arg(short, long)]
         file: Option<String>,
+        /// Replace the server copy even if it changed since you last synced,
+        /// instead of merging
+        #[arg(long)]
+        force: bool,
     },
 
     /// Fetch and decrypt the project's .env
@@ -51,7 +55,8 @@ pub enum Commands {
         /// Pull a specific .env* file without being asked
         #[arg(short, long)]
         file: Option<String>,
-        /// Overwrite an existing local file without confirmation
+        /// Replace the local file with the server copy, discarding local
+        /// edits, without asking
         #[arg(long)]
         force: bool,
     },
@@ -146,7 +151,11 @@ pub async fn dispatch(command: Commands) -> Result<(), String> {
         Commands::Create { project_name } => commands::project::create(project_name).await,
         Commands::Init { project_name } => commands::project::init(project_name).await,
         Commands::Projects => commands::project::list().await,
-        Commands::Push { message, file } => commands::sync::push(message, file).await,
+        Commands::Push {
+            message,
+            file,
+            force,
+        } => commands::sync::push(message, file, force).await,
         Commands::Pull { file, force } => commands::sync::pull(file, force).await,
         Commands::Commit { message } => commands::snapshot::commit(message).await,
         Commands::Logs { file, remote } => commands::history::show(file, remote).await,
@@ -195,9 +204,14 @@ mod tests {
         ])
         .unwrap();
         match cli.command {
-            Commands::Push { message, file } => {
+            Commands::Push {
+                message,
+                file,
+                force,
+            } => {
                 assert_eq!(message, "deploy");
                 assert_eq!(file.as_deref(), Some(".env.ci"));
+                assert!(!force, "merging is the default");
             }
             _ => panic!("expected push"),
         }

@@ -11,4 +11,5 @@ pub mod api;
 pub mod crypto;
 pub mod device;
 pub mod env_files;
+pub mod env_merge;
 pub mod workspace;

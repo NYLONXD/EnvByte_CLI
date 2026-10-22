@@ -4,7 +4,10 @@
 //! with the device identity, so losing this file costs you nothing but the
 //! link itself.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +33,11 @@ pub struct ProjectConfig {
     /// Last key version this checkout saw, for a friendlier status display.
     #[serde(default)]
     pub key_version: Option<i32>,
+    /// The server commit each local `.env*` file was last pulled or pushed
+    /// at. A push names it, so the server can refuse to overwrite a change
+    /// this checkout never saw.
+    #[serde(default)]
+    pub synced_commits: BTreeMap<String, String>,
 }
 
 impl ProjectConfig {
@@ -103,6 +111,7 @@ mod tests {
         let config: ProjectConfig = serde_json::from_str(raw).unwrap();
         assert_eq!(config.owner_username, None);
         assert_eq!(config.key_version, None);
+        assert!(config.synced_commits.is_empty());
         assert_eq!(config.project_name.as_deref(), Some("api"));
     }
 }

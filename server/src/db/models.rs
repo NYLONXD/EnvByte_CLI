@@ -28,6 +28,9 @@ pub struct EnvFileResponse {
     #[sqlx(rename = "encrypted_content")]
     pub content: String,
     pub key_version: i32,
+    /// The commit this content was stored under. A client sends it back as
+    /// `base_commit_id` when it pushes an edit of this version.
+    pub commit_id: Uuid,
 }
 
 /// A project data key sealed to one member's identity public key.

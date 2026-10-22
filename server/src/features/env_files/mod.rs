@@ -1,8 +1,9 @@
 //! Encrypted environment files: push, pull, history and rollback.
 //!
 //! The server treats every payload as opaque bytes. Its only guarantees are
-//! that the caller may write, that the payload is bounded, and that it was
-//! encrypted under the project's current key.
+//! that the caller may write, that the payload is bounded, that it was
+//! encrypted under the project's current key, and that it was edited from the
+//! file's current version.
 
 pub mod dto;
 pub mod handlers;
@@ -19,4 +20,8 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users/me/env", post(handlers::push).get(handlers::pull))
         .route("/projects/{project_id}/commits", get(handlers::history))
+        .route(
+            "/projects/{project_id}/commits/{commit_id}",
+            get(handlers::commit),
+        )
 }

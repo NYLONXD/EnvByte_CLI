@@ -6,6 +6,8 @@ export const API_STATUS_URL = "https://api.envbyte.trackedge.in/health/ready";
 export const AUTHOR_GITHUB_URL = "https://github.com/NYLONXD";
 /** The Windows installer (packaging/msi in the repo), attached to every release. */
 export const WINDOWS_MSI_URL = `${REPO_URL}/releases/latest/download/envbyte.msi`;
+/** The macOS installer (packaging/macos in the repo), attached to every release since 0.5.0. */
+export const MACOS_PKG_URL = `${REPO_URL}/releases/latest/download/envbyte.pkg`;
 
 export type Shell = "sh" | "powershell";
 
@@ -48,27 +50,6 @@ export const INSTALL_METHODS: InstallMethod[] = [
     command: "npm install -g envbyte",
     shell: "sh",
     note: "Pulls in the prebuilt binary for your platform.",
-  },
-  {
-    id: "brew",
-    label: "Homebrew",
-    command: "brew install nylonxd/tap/envbyte",
-    shell: "sh",
-    note: "macOS and Linux.",
-  },
-  {
-    id: "scoop",
-    label: "Scoop",
-    command: "scoop bucket add nylonxd https://github.com/NYLONXD/scoop-bucket; scoop install nylonxd/envbyte",
-    shell: "powershell",
-    note: "Windows, per-user, no administrator rights needed.",
-  },
-  {
-    id: "winget",
-    label: "winget",
-    command: "winget install Envbyte.Envbyte",
-    shell: "powershell",
-    note: "Windows Package Manager.",
   },
   {
     id: "cargo",

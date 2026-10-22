@@ -147,7 +147,36 @@ real.
    Earlier versions held by current members are kept, so history stays readable.
 
 After a rotation, a client still holding the old key gets a `409` on push naming
-both versions, instead of overwriting a file the team can no longer read.
+both versions, instead of overwriting a file the team can no longer read. The
+key-version check holds a share lock on the project row until the push commits,
+and a rotation takes that row exclusively, so the two cannot interleave.
+
+Each rotated file carries the commit the admin decrypted. A push that lands
+while the rotation is being prepared makes it fail with `409`, instead of being
+replaced by a re-encryption of the version before it.
+
+## Conflicting edits
+
+Two devices edit the same file from the same version. The server cannot merge
+them - it only holds ciphertext - so its job is to notice, and the CLI's is to
+merge.
+
+1. Every pull and push records, in `.envbyte`, the commit each file is now at
+   (`synced_commits`). A push sends it as `base_commit_id`.
+2. The server (`features/env_files/handlers.rs`) locks the file's row and
+   compares. Different from the current commit means someone else pushed
+   first: `409` with `code: "stale_base"`, nothing written. Of two simultaneous
+   pushes from one base, exactly one gets through.
+3. The CLI (`commands/sync.rs`) fetches the current version and the base
+   version, decrypts both, and merges key by key (`core/env_merge.rs`): a key
+   one side changed takes that side's value; a key both changed differently is
+   put to the user. The merged file is written locally and pushed with the
+   current commit as its base.
+4. `envbyte pull` uses the same merge when the local file has edits of its own,
+   instead of offering only to overwrite it.
+
+`push --force` and `pull --force` skip the merge and let one side win
+outright.
 
 ## Project names
 

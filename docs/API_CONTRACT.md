@@ -157,7 +157,7 @@ Owner/admin operation. Request:
 ```json
 {
   "grants": [{ "user_id": "...", "wrapped_key": "greenbyte:wrap:v1:..." }],
-  "files":  [{ "filename": ".env", "content": "greenbyte:v3:..." }]
+  "files":  [{ "filename": ".env", "content": "greenbyte:v3:...", "base_commit_id": "..." }]
 }
 ```
 
@@ -167,10 +167,17 @@ others. A partial rotation is worse than none: a missing grant locks out a
 colleague, and a file left on the old key stays readable to whoever the rotation
 was meant to shut out.
 
+Each file's `base_commit_id` names the commit the client decrypted. If a push
+has moved the file on since, the rotation is rejected with `409 Conflict`
+rather than silently replacing that push; run it again. Clients older than 0.5
+omit the field and skip this check.
+
 On success it increments the project's `key_version`, inserts the new grants,
 deletes every grant belonging to a non-member at every version, writes a new
 version of each file at the new key version, and records an audit event.
-Returns `{ "key_version", "members_granted", "files_reencrypted", "grants_revoked" }`.
+Returns `{ "key_version", "members_granted", "files_reencrypted",
+"grants_revoked", "files": [{ "filename", "commit_id" }] }`, the last naming
+the commit each file now sits at.
 
 Earlier key versions held by current members are retained, so history stays
 readable to the team.
@@ -188,7 +195,8 @@ Authenticated. Request:
   "filename": ".env.production",
   "content": "greenbyte:v3:<base64-envelope>",
   "message": "rotate database password",
-  "key_version": 2
+  "key_version": 2,
+  "base_commit_id": "commit-id-this-edit-started-from"
 }
 ```
 
@@ -202,11 +210,27 @@ version with a payload the rest of the team can no longer read.
 
 `commit_id` makes pushes idempotent. Repeating an identical request with the same ID returns the existing commit; reusing the ID with different content or metadata returns `409 Conflict`.
 
+`base_commit_id` is the file's commit as the client last saw it - from a pull,
+or from its own last push - or `null` when the client believes the file is new.
+If it is not the file's current commit, the push is rejected and nothing is
+written:
+
+```json
+{ "error": "...", "code": "stale_base", "current_commit_id": "..." }
+```
+
+The client then fetches the current version, merges on its own side (the server
+cannot read either version) and pushes again with `base_commit_id` set to
+`current_commit_id`. The check runs under the file's row lock, so of two pushes
+from the same base exactly one succeeds. A request without the field at all,
+from a client older than 0.5, skips the check and keeps last-write-wins.
+
 ### `GET /users/me/env?project_id={project_id}`
 
 Authenticated project-member operation. Returns an array of
-`{ "filename", "content", "key_version" }` for that project only. Never return
-files from another project owned by the same user.
+`{ "filename", "content", "key_version", "commit_id" }` for that project only.
+Never return files from another project owned by the same user. `commit_id` is
+what the client sends back as `base_commit_id` when it pushes an edit.
 
 `key_version` tells the client which of its held keys to use - a rolled-back
 file may sit on an older version than the project's current one.
@@ -221,6 +245,14 @@ Authenticated. Request: `{ "commit_id" }`. Verify that the commit belongs to the
 
 Authenticated project-member operation. Returns up to 500 newest entries containing `commit_id`, `filename`, `message`,
 `author`, `key_version`, and `created_at`.
+
+### `GET /projects/{project_id}/commits/{commit_id}`
+
+Authenticated writer operation. Returns one stored version, current or not, as
+`{ "filename", "content", "key_version", "commit_id" }`: the version both sides
+of a conflicting edit started from, which a three-way merge needs. Writers can
+already roll back to any version and pull it, so this exposes nothing new;
+viewers get `403`. `404` if the commit is not in this project.
 
 ### `GET /projects/{project_id}/audit`
 

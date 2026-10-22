@@ -4,7 +4,7 @@ use axum::{
     extract::{Path, Query, State},
     Json,
 };
-use sqlx::Row;
+use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::{
@@ -12,7 +12,9 @@ use crate::{
     error::ApiError,
     features::env_files::{
         dto::{CommitResponse, PullQuery, PushRequest, PushResponse},
-        service::{validate_filename, verify_key_version, MAX_ENCRYPTED_CONTENT},
+        service::{
+            require_current_base, validate_filename, verify_key_version, MAX_ENCRYPTED_CONTENT,
+        },
     },
     security::{
         permissions::{require_member, require_writer},
@@ -38,8 +40,9 @@ pub async fn push(
             "commit message must be 1-500 characters".to_string(),
         ));
     }
-    verify_key_version(&state, request.project_id, request.key_version).await?;
 
+    // A retry of a push that already landed succeeds here, before the base
+    // check, which it would now fail against its own commit.
     if let Some(commit_id) = request.commit_id {
         if let Some(existing) = replayed_commit(&state, commit_id).await? {
             return existing_matches(&request, existing).map(|()| {
@@ -52,27 +55,12 @@ pub async fn push(
     }
 
     let mut transaction = state.pool.begin().await?;
-    let existing =
-        sqlx::query("SELECT id FROM env_files WHERE project_id = $1 AND filename = $2 FOR UPDATE")
-            .bind(request.project_id)
-            .bind(&request.filename)
-            .fetch_optional(&mut *transaction)
-            .await?;
-    let file_id = match existing {
-        Some(row) => row
-            .try_get::<Uuid, _>("id")
-            .map_err(|_| ApiError::Internal)?,
-        None => {
-            let id = Uuid::new_v4();
-            sqlx::query("INSERT INTO env_files (id, project_id, filename) VALUES ($1, $2, $3)")
-                .bind(id)
-                .bind(request.project_id)
-                .bind(&request.filename)
-                .execute(&mut *transaction)
-                .await?;
-            id
-        }
-    };
+    verify_key_version(&mut transaction, request.project_id, request.key_version).await?;
+    let (file_id, current_commit) =
+        lock_file(&mut transaction, request.project_id, &request.filename).await?;
+    if let Some(base) = request.base_commit_id {
+        require_current_base(base, current_commit)?;
+    }
     let version_id = Uuid::new_v4();
     let commit_id = request.commit_id.unwrap_or_else(Uuid::new_v4);
     sqlx::query(
@@ -122,7 +110,7 @@ pub async fn pull(
 ) -> Result<Json<Vec<EnvFileResponse>>, ApiError> {
     require_member(&state.pool, query.project_id, user.id).await?;
     let files = sqlx::query_as::<_, EnvFileResponse>(
-        "SELECT f.filename, v.encrypted_content, v.key_version FROM env_files f
+        "SELECT f.filename, v.encrypted_content, v.key_version, v.commit_id FROM env_files f
          JOIN env_versions v ON v.id = f.current_version_id
          WHERE f.project_id = $1 ORDER BY f.filename",
     )
@@ -130,6 +118,30 @@ pub async fn pull(
     .fetch_all(&state.pool)
     .await?;
     Ok(Json(files))
+}
+
+/// One stored version of a file, current or not. A client merging its edit
+/// with someone else's needs the version both started from.
+///
+/// Writers only: they can already roll the project back to any version and
+/// pull it, so this reveals nothing new. Viewers see the current files alone.
+pub async fn commit(
+    State(state): State<AppState>,
+    user: AuthUser,
+    Path((project_id, commit_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<EnvFileResponse>, ApiError> {
+    require_writer(&state.pool, project_id, user.id).await?;
+    let file = sqlx::query_as::<_, EnvFileResponse>(
+        "SELECT f.filename, v.encrypted_content, v.key_version, v.commit_id
+         FROM env_versions v JOIN env_files f ON f.id = v.env_file_id
+         WHERE v.commit_id = $1 AND f.project_id = $2",
+    )
+    .bind(commit_id)
+    .bind(project_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| ApiError::NotFound("commit not found in this project".to_string()))?;
+    Ok(Json(file))
 }
 
 pub async fn history(
@@ -149,6 +161,46 @@ pub async fn history(
     .fetch_all(&state.pool)
     .await?;
     Ok(Json(commits))
+}
+
+/// Creates the file's row on its first push, then locks it, so pushes to one
+/// file queue up rather than race. Returns the file and its current commit,
+/// which cannot move while the lock is held.
+///
+/// Two statements, not a join: a locking read that waits on another push
+/// re-reads only the locked row, and would pair it with a stale version.
+async fn lock_file(
+    transaction: &mut Transaction<'_, Postgres>,
+    project_id: Uuid,
+    filename: &str,
+) -> Result<(Uuid, Option<Uuid>), ApiError> {
+    sqlx::query(
+        "INSERT INTO env_files (id, project_id, filename) VALUES ($1, $2, $3)
+         ON CONFLICT (project_id, filename) DO NOTHING",
+    )
+    .bind(Uuid::new_v4())
+    .bind(project_id)
+    .bind(filename)
+    .execute(&mut **transaction)
+    .await?;
+    let (file_id, current_version) = sqlx::query_as::<_, (Uuid, Option<Uuid>)>(
+        "SELECT id, current_version_id FROM env_files
+         WHERE project_id = $1 AND filename = $2 FOR UPDATE",
+    )
+    .bind(project_id)
+    .bind(filename)
+    .fetch_one(&mut **transaction)
+    .await?;
+    let current_commit = match current_version {
+        Some(version_id) => {
+            sqlx::query_scalar::<_, Uuid>("SELECT commit_id FROM env_versions WHERE id = $1")
+                .bind(version_id)
+                .fetch_optional(&mut **transaction)
+                .await?
+        }
+        None => None,
+    };
+    Ok((file_id, current_commit))
 }
 
 /// A client-supplied commit id makes a retried push idempotent. Looks up what

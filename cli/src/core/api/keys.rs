@@ -23,6 +23,9 @@ pub struct GrantInput {
 pub struct RotatedFile {
     pub filename: String,
     pub content: String,
+    /// The commit that was decrypted to produce `content`. The server refuses
+    /// the rotation if the file has moved on since.
+    pub base_commit_id: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -37,6 +40,15 @@ pub struct RotationResult {
     pub members_granted: usize,
     pub files_reencrypted: usize,
     pub grants_revoked: u64,
+    /// The commit each file moved to. Servers older than 0.5 do not send it.
+    #[serde(default)]
+    pub files: Vec<RotatedCommit>,
+}
+
+#[derive(Deserialize)]
+pub struct RotatedCommit {
+    pub filename: String,
+    pub commit_id: String,
 }
 
 /// Every data key version the caller holds for this project.

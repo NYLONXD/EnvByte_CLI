@@ -23,6 +23,11 @@ pub struct GrantInput {
 pub struct RotatedFile {
     pub filename: String,
     pub content: String,
+    /// The commit the client decrypted to produce `content`. If the file has
+    /// moved on since, the rotation is refused rather than silently undoing
+    /// that push. Clients older than 0.5 omit it.
+    #[serde(default)]
+    pub base_commit_id: Option<Uuid>,
 }
 
 #[derive(Serialize)]
@@ -31,4 +36,13 @@ pub struct RotateResponse {
     pub members_granted: usize,
     pub files_reencrypted: usize,
     pub grants_revoked: u64,
+    /// The commit each file now sits at, so the rotating client can carry its
+    /// own checkout forward instead of conflicting with itself.
+    pub files: Vec<RotatedCommit>,
+}
+
+#[derive(Serialize)]
+pub struct RotatedCommit {
+    pub filename: String,
+    pub commit_id: Uuid,
 }

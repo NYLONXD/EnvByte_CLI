@@ -7,14 +7,13 @@ Envbyte is built by Himanshu Jha (GitHub: NYLONXD). It is written in Rust and du
 ## Install
 
 - macOS and Linux: `curl -fsSL https://envbyte.trackedge.in/install.sh | sh`
+- macOS installer (double-click; Apple silicon and Intel): https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte.pkg
 - Windows installer: `msiexec /i https://github.com/NYLONXD/EnvByte_CLI/releases/latest/download/envbyte.msi`
 - Windows without an installer window: `powershell -c "irm https://envbyte.trackedge.in/install.ps1 | iex"`
 - npm: `npm install -g envbyte`
-- Homebrew: `brew install nylonxd/tap/envbyte`
-- winget: `winget install Envbyte.Envbyte`
 - Cargo (builds from source, Rust 1.88 or newer): `cargo install envbyte`
 
-None of the installers need administrator rights.
+Only the macOS installer asks for an administrator password, because it installs into /usr/local/bin.
 
 ## Quick start
 

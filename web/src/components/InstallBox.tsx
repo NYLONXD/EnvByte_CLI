@@ -1,13 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { INSTALL_METHODS } from "../lib/content";
+import { detectPlatform } from "../lib/platform";
 
 /** Picks the tab a visitor most likely wants, from what the browser reports. */
 function detectDefaultMethod(): string {
-  if (typeof navigator === "undefined") return "sh";
-  const platform =
-    (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform ??
-    navigator.userAgent;
-  return /win/i.test(platform) ? "msi" : "sh";
+  return detectPlatform() === "windows" ? "msi" : "sh";
 }
 
 async function copyText(text: string): Promise<boolean> {

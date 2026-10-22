@@ -18,6 +18,12 @@ its `msiexec /i` command both link to `releases/latest/download/envbyte.msi`,
 so they only work once a release made by this workflow exists. The MSI takes
 its version from `cli/Cargo.toml`, and installing a newer one replaces the old.
 
+Since 0.5.0 each release also carries `envbyte.pkg`, the macOS installer, built
+from `macos/` around a universal binary made of both Mac builds. The website's
+Download button serves it to Mac visitors. It installs `/usr/local/bin/envbyte`
+and asks for the user's password to do so. It is unsigned until the Apple
+signing below is set up.
+
 Do not tag or `cargo publish` by hand (past the one-time first publish under
 crates.io below): the release creates the tag, and publishing to crates.io on
 its own is how a version ends up there while the install scripts still have
@@ -36,6 +42,8 @@ nothing.
 | `render.py` | Writes the Homebrew formula, Scoop manifest and winget manifests from a release's checksums |
 | `msi/envbyte.wxs` | The Windows installer: a per-user MSI that installs `envbyte.exe` and adds it to PATH |
 | `msi/build.ps1` | Builds `envbyte.msi` with WiX (needs the .NET SDK): `pwsh packaging/msi/build.ps1 -Version 0.4.2 -Binary target/release/envbyte.exe` |
+| `macos/build.sh` | Builds `envbyte.pkg` on a Mac: `sh packaging/macos/build.sh 0.5.0 <x86_64 envbyte> <aarch64 envbyte> envbyte.pkg` |
+| `macos/distribution.xml`, `macos/resources/` | The macOS installer window: title, welcome and closing pages |
 
 ## Switching channels on
 
@@ -109,6 +117,32 @@ Microsoft reviews every new package, so the first version goes in by hand:
 3. Once it is merged, keep the fork, create a classic token with the
    `public_repo` scope, save it as `WINGET_TOKEN`, and set `PUBLISH_WINGET` to
    `true`. Later releases open their pull request automatically.
+
+### Signing the macOS installer (`SIGN_MACOS`)
+
+Unsigned, `envbyte.pkg` does not simply open: macOS says it cannot verify the
+developer, and the user has to go to System Settings → Privacy & Security and
+click **Open Anyway**. Signing and notarizing it removes that step. It needs a
+paid Apple Developer Program membership.
+
+1. In the Apple Developer portal, create a **Developer ID Application** and a
+   **Developer ID Installer** certificate. Export both, with their private
+   keys, from Keychain Access into one `.p12` file with a password.
+2. Save these as repository secrets:
+   - `MACOS_CERTIFICATES_P12`: the `.p12` file, base64-encoded
+     (`base64 -i certificates.p12 | pbcopy`)
+   - `MACOS_CERTIFICATES_PASSWORD`: its password
+   - `MACOS_APP_IDENTITY`: `Developer ID Application: <name> (<team id>)`
+   - `MACOS_INSTALLER_IDENTITY`: `Developer ID Installer: <name> (<team id>)`
+   - `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_PASSWORD` (an app-specific
+     password from account.apple.com), for notarization
+3. Set the variable `SIGN_MACOS` to `true`.
+
+The next release then signs the binary and the package, notarizes the package
+with Apple and staples the ticket to it.
+
+The Windows installer is unsigned too, so SmartScreen shows "Windows protected
+your PC" until it builds a reputation; **More info → Run anyway** gets past it.
 
 ### Website (Vercel)
 

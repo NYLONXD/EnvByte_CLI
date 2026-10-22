@@ -49,6 +49,7 @@ pub async fn create(project_name: String) -> Result<(), String> {
         soft_token: Some(created.soft_token),
         refresher_token: None,
         key_version: Some(created.key_version),
+        synced_commits: Default::default(),
     })?;
 
     ui::success(&format!("Project '{}' created.", project_name.cyan()));
@@ -109,6 +110,7 @@ pub async fn init(expected_name: Option<String>) -> Result<(), String> {
         soft_token: Some(joined.soft_token),
         refresher_token: Some(refresher_token),
         key_version: Some(joined.key_version),
+        synced_commits: Default::default(),
     })?;
 
     ui::success(&format!(
